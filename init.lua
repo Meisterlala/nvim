@@ -169,11 +169,11 @@ vim.opt.confirm = true
 
 -- Relaod Config
 require 'reload'
-vim.keymap.set('n', '<leader>u', ':lua ReloadConfig()<CR>', { desc = 'Reload the config' })
+-- vim.keymap.set('n', '<leader>u', ':lua ReloadConfig()<CR>', { desc = 'Reload the config' })
 
 -- Set up config sync
 require 'sync'
-vim.keymap.set('n', '<leader>gc', ':ConfigPush<CR>', { desc = 'Push the config folder to GitHub' })
+vim.keymap.set('n', '<leader>u', ':ConfigPush<CR>', { desc = 'Push the config folder to GitHub' })
 
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
