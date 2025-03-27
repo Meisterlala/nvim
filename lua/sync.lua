@@ -30,20 +30,23 @@ local function commit_and_push_config_changes()
   add_handle:close()
 
   -- Commit changes with simple message
-  local commit_command = "git commit -m 'Config update'"
-  local commit_handle = io.popen(commit_command)
-  local commit_status = commit_handle:close() --check exit code.
+  local commit_command = 'git commit -m From_sync.lua'
+  local commit_handle = io.popen(commit_command .. ' 2>&1') -- Capture stderr
+  local commit_output = commit_handle:read '*a'
+  local commit_status = commit_handle:close()
+
   if commit_status ~= 0 then
-    vim.notify('Failed to commit changes.', vim.log.levels.ERROR)
+    vim.notify('Failed to commit changes:\n' .. commit_output, vim.log.levels.ERROR)
     vim.fn.chdir(current_dir)
     return
   end
 
   -- Push changes
-  local push_handle = io.popen 'git push'
+  local push_handle = io.popen 'git push 2>&1'
+  local push_output = push_handle:read '*a'
   local push_status = push_handle:close()
   if push_status ~= 0 then
-    vim.notify('Failed to push changes.', vim.log.levels.ERROR)
+    vim.notify('Failed to push changes:\n' .. push_output, vim.log.levels.ERROR)
     vim.fn.chdir(current_dir)
     return
   end
