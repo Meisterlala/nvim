@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to english
-vim.cmd 'language en_US'
+vim.cmd 'language C'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
@@ -169,7 +169,11 @@ vim.opt.confirm = true
 
 -- Relaod Config
 require 'reload'
-vim.keymap.set('n', '<leader>u', ':lua ReloadConfig()<CR>', { noremap = true, desc = 'Reload the config', silent = true })
+vim.keymap.set('n', '<leader>u', ':lua ReloadConfig()<CR>', { desc = 'Reload the config' })
+
+-- Set up config sync
+require 'sync'
+vim.keymap.set('n', '<leader>gc', ':ConfigPush<CR>', { desc = 'Push the config folder to GitHub' })
 
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
