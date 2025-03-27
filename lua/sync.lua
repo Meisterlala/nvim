@@ -36,7 +36,7 @@ local function commit_and_push_config_changes()
   local commit_status = commit_handle:close()
 
   if commit_status ~= 0 then
-    vim.notify(commit_status .. 'Failed to commit changes:\n' .. commit_output, vim.log.levels.ERROR)
+    vim.notify(toString(commit_status) .. 'Failed to commit changes:\n' .. commit_output, vim.log.levels.ERROR)
     vim.fn.chdir(current_dir)
     return
   end
