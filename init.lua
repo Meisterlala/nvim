@@ -437,6 +437,7 @@ require('lazy').setup({
       -- Enable Telescope extensions if they are installed
       pcall(require('telescope').load_extension, 'fzf')
       pcall(require('telescope').load_extension, 'ui-select')
+      pcall(require('telescope').load_extension, 'chezmoi')
 
       -- See `:help telescope.builtin`
       local builtin = require 'telescope.builtin'
@@ -475,6 +476,9 @@ require('lazy').setup({
           cwd = vim.fn.stdpath 'config',
         }
       end, { desc = '[S]earch [N]eovim files' })
+
+      -- Shortcut for chezmoi
+      vim.keymap.set('n', '<leader>sc', require('telescope').extensions.chezmoi.find_files, { desc = '[S]earch [C]hezmoi Files' })
     end,
   },
 
