@@ -39,7 +39,6 @@
 
 -- Set <space> as the leader key
 -- See `:help mapleader`
---  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
@@ -49,15 +48,8 @@ vim.cmd 'language C'
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
 
--- [[ Setting options ]]
--- See `:help vim.opt`
--- NOTE: You can change these options as you wish!
---  For more options, you can see `:help option-list`
-
 -- Make line numbers default
 vim.opt.number = true
--- You can also add relative line numbers, to help with jumping.
---  Experiment for yourself to see if you like it!
 -- vim.opt.relativenumber = true
 
 -- Enable mouse mode, can be useful for resizing splits for example!
@@ -85,7 +77,7 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
 -- Keep signcolumn on by default
-vim.opt.signcolumn = 'yes'
+-- vim.opt.signcolumn = 'yes'
 
 -- Decrease update time
 vim.opt.updatetime = 250
@@ -118,15 +110,10 @@ vim.opt.scrolloff = 10
 vim.opt.confirm = true
 
 -- [[ Basic Keymaps ]]
---  See `:help vim.keymap.set()`
-
--- Relaod Config
-require 'reload'
--- vim.keymap.set('n', '<leader>u', ':lua ReloadConfig()<CR>', { desc = 'Reload the config' }
 
 -- Set up config sync
 require 'sync'
-vim.keymap.set('n', '<leader>u', ':ConfigPush<CR>', { desc = 'Push the config folder to GitHub' })
+vim.keymap.set('n', '<leader>u', ':ConfigPush<CR>', { desc = '[U]pload the nvim config to GitHub' })
 
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
