@@ -1,38 +1,90 @@
-local function get_git_nvim_status()
-  local SPECIFIC_REPO_PATH = vim.fn.stdpath 'config'
-  -- Check if the path exists and is a directory
-  if vim.fn.isdirectory(SPECIFIC_REPO_PATH) == 0 then
-    return 'Repo Not Found!'
+local nvim_config_git_status = ''
+local git_check_in_progress = false
+
+local function refresh_nvim_config_git_status()
+  -- Prevent multiple simultaneous Git checks
+  if git_check_in_progress then
+    return
+  end
+  git_check_in_progress = true
+
+  local nvim_config_path = vim.fn.stdpath 'config'
+
+  -- Verify nvim config directory exists
+  if vim.fn.isdirectory(nvim_config_path) == 0 then
+    nvim_config_git_status = 'Config Dir Not Found!'
+    git_check_in_progress = false
+    return
   end
 
-  -- Get current branch
-  local branch_cmd = string.format('git -C %s rev-parse --abbrev-ref HEAD', SPECIFIC_REPO_PATH)
-  local branch = vim.fn.system(branch_cmd):gsub('\n', '')
+  -- Get current Git branch
+  vim.fn.jobstart({
+    'git',
+    '-C',
+    nvim_config_path,
+    'rev-parse',
+    '--abbrev-ref',
+    'HEAD',
+  }, {
+    stdout_buffered = true,
+    on_stdout = function(_, branch_output)
+      local current_branch = (branch_output[1] or ''):gsub('\n', '')
 
-  if branch == '' then
-    return 'Not a Git Repo!'
-  end
+      if current_branch == '' then
+        nvim_config_git_status = 'Not a Git Repo!'
+        git_check_in_progress = false
+        vim.cmd 'redrawstatus'
+        return
+      end
 
-  -- Check for uncommitted changes (M = modified, A = added, D = deleted, etc.)
-  local status_cmd = string.format('git -C %s status --porcelain', SPECIFIC_REPO_PATH)
-  local status = vim.fn.system(status_cmd)
-  local has_changes = string.len(status) > 0
+      -- Check for uncommitted changes
+      vim.fn.jobstart({
+        'git',
+        '-C',
+        nvim_config_path,
+        'status',
+        '--porcelain',
+      }, {
+        stdout_buffered = true,
+        on_stdout = function(_, status_output)
+          local has_uncommitted_changes = #status_output > 1 or (status_output[1] and status_output[1] ~= '')
 
-  -- Format output
-  local output = '⚡ nvim config updated'
-  if branch ~= 'master' and branch ~= 'main' then
-    output = output .. ' (' .. branch .. ')'
-  end
+          -- Build status message
+          local status_message = '⚡ nvim config updated'
+          if current_branch ~= 'master' and current_branch ~= 'main' then
+            status_message = status_message .. ' (' .. current_branch .. ')'
+          end
 
-  if has_changes then
-    return output
-  end
-  return ''
+          nvim_config_git_status = has_uncommitted_changes and status_message or ''
+          git_check_in_progress = false
+          vim.cmd 'redrawstatus'
+        end,
+        on_exit = function()
+          git_check_in_progress = false
+        end,
+      })
+    end,
+    on_exit = function()
+      git_check_in_progress = false
+    end,
+  })
 end
 
 return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
+    -- Update nvim git status and then call it initally
+    local function get_nvim_config_git_status()
+      return nvim_config_git_status
+    end
+    refresh_nvim_config_git_status()
+
+    -- Trigger Git status check when nvim config files are saved
+    vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
+      pattern = vim.fn.stdpath 'config' .. '/*',
+      callback = refresh_nvim_config_git_status,
+    })
+
     -- Better Around/Inside textobjects
     --
     -- Examples:
@@ -65,6 +117,7 @@ return { -- Collection of various small independent plugins/modules
           local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
           local location = MiniStatusline.section_location { trunc_width = 75 }
           local search = MiniStatusline.section_searchcount { trunc_width = 75 }
+          local git_status = get_nvim_config_git_status()
 
           return MiniStatusline.combine_groups {
             { hl = mode_hl, strings = { mode } },
@@ -72,7 +125,7 @@ return { -- Collection of various small independent plugins/modules
             '%<', -- Mark general truncate point
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
-            { hl = 'gitstatus', strings = { get_git_nvim_status() } },
+            { hl = 'gitstatus', strings = { git_status } },
             { hl = 'MiniStatuslineFileinfo', strings = { fileinfo } },
             { hl = mode_hl, strings = { search, location } },
           }
