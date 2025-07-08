@@ -30,7 +30,7 @@ return { -- Collection of various small independent plugins/modules
 
     -- Trigger Git status check when nvim config files are saved
     vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
-      pattern = vim.fn.stdpath 'config' .. '/*',
+      pattern = vim.fn.stdpath 'config' .. '\\*',
       callback = sync.refresh_nvim_config_git_status,
     })
 
