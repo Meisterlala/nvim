@@ -1,5 +1,27 @@
 local sync = require 'sync'
 
+-- Returns Lazy plugin updates status if checker.enabled is true
+local function lazy_updates_status()
+  local ok, lazy_config = pcall(require, 'lazy.core.config')
+  if not ok or not lazy_config or not lazy_config.options or not lazy_config.options.checker or not lazy_config.options.checker.enabled then
+    return ''
+  end
+  local ok_status, lazy_status = pcall(require, 'lazy.status')
+  if not ok_status or not lazy_status.updates then
+    return ''
+  end
+  return lazy_status.updates() or ''
+end
+
+-- Returns nvim config git status if sync module and function exist
+local function sync_git_status()
+  local ok, sync_mod = pcall(require, 'sync')
+  if not ok or not sync_mod or type(sync_mod.get_nvim_config_git_status) ~= 'function' then
+    return ''
+  end
+  return sync_mod.get_nvim_config_git_status() or ''
+end
+
 return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
@@ -44,7 +66,7 @@ return { -- Collection of various small independent plugins/modules
           local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
           local location = MiniStatusline.section_location { trunc_width = 75 }
           local search = MiniStatusline.section_searchcount { trunc_width = 75 }
-          local git_status = sync.get_nvim_config_git_status()
+          local git_status = sync_git_status()
 
           return MiniStatusline.combine_groups {
             { hl = mode_hl, strings = { mode } },
@@ -53,7 +75,7 @@ return { -- Collection of various small independent plugins/modules
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
             { hl = 'gitstatus', strings = { git_status } },
-            { hl = 'MiniStatuslineFileinfo', strings = { fileinfo } },
+            { hl = 'MiniStatuslineFileinfo', strings = { fileinfo, lazy_updates_status() } },
             { hl = mode_hl, strings = { search, location } },
           }
         end,
