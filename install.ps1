@@ -3,8 +3,6 @@ $wingetRequirements = @(
     @{ Name = "Zig"; Id = "zig.zig" }
 )
 
-
-
 # Check if nvim is installed
 $nvimPath = Get-Command nvim -ErrorAction SilentlyContinue
 if (!$nvimPath) {
@@ -16,8 +14,15 @@ if (!$nvimPath) {
     } catch {
         Write-Error "Failed to install nvim: $($_.Exception.Message)"
     }
+} else {
+    Write-Host "nvim is already installed. Attempting to update with winget..."
+    try {
+        winget upgrade --id Neovim.Neovim -e --source winget
+        Write-Host "nvim updated successfully."
+    } catch {
+        Write-Error "Failed to update nvim: $($_.Exception.Message)"
+    }
 }
-
 
 
 # Install all remaining requirements with winget

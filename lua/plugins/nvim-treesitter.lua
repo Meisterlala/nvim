@@ -1,29 +1,20 @@
 return { -- Highlight, edit, and navigate code
   'nvim-treesitter/nvim-treesitter',
   build = ':TSUpdate',
-  branch = 'main',
+  -- Will be needed in the future. Right now main is still broken
+  -- branch = 'main',
   config = function()
     -- Add install dir to rtp
     local install_dir = vim.fn.stdpath 'data' .. '/site'
     vim.opt.rtp:prepend(install_dir)
 
     -- load configs module
-    local configs = require 'nvim-treesitter.config'
+    local configs = require 'nvim-treesitter'
     configs.setup {
-      ensure_installed = { 'diff', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
+      ensure_installed = { 'c', 'diff', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
       auto_install = true,
-      sync_install = false, -- Install stuff async
       -- Modules
       highlight = {
-        enable = true,
-      },
-      indent = {
-        enable = true,
-      },
-      incremental_selection = {
-        enable = true,
-      },
-      textobjects = {
         enable = true,
       },
     }
