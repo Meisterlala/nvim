@@ -26,7 +26,7 @@ return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
     -- Initialize and update nvim git status using sync module
-    -- sync.refresh_nvim_config_git_status()
+    sync.refresh_nvim_config_git_status()
 
     -- Trigger Git status check when nvim config files are saved
     vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
@@ -38,7 +38,7 @@ return { -- Collection of various small independent plugins/modules
         require('sync').refresh_nvim_config_git_status()
       end,
     })
-    dsfsdf
+
     -- Better Around/Inside textobjects
     --
     -- Examples:
@@ -80,7 +80,7 @@ return { -- Collection of various small independent plugins/modules
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
             { hl = 'gitstatus', strings = { git_status } },
-            { hl = 'MiniStatuslineFileinfo', strings = { fileinfo, lazy_updates_status() } },
+            { hl = 'MiniStatuslineFileinfo', strings = { lazy_updates_status(), fileinfo } },
             { hl = mode_hl, strings = { search, location } },
           }
         end,
