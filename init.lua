@@ -134,6 +134,10 @@ vim.keymap.set('n', '<C-right>', '<C-w><C-l>', { desc = 'Move focus to the right
 vim.keymap.set('n', '<C-down>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-up>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- Keybind for scrolling up or down with page-up and page-down
+vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
+vim.keymap.set('n', '<PageDown>', '<C-d>', { desc = 'Scroll down half a page' })
+
 -- [[ Basic Autocommands ]]
 --
 -- See :help lua-guide-autocommands for details on autocommand usage.
@@ -172,6 +176,7 @@ require('lazy').setup({
 }, {
   checker = {
     enabled = true, -- Enable automatic plugin update checks
+    notify = false,
   },
   change_detection = {
     notify = false, -- Don't show notification when plugin settings change

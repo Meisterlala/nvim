@@ -40,6 +40,9 @@ return {
         insert = '<C-p>',
       },
     },
+    history = {
+      max_tokens = 32768,
+    },
     mappings = {
       --- @class AvanteConflictMappings
       diff = {
@@ -79,7 +82,7 @@ return {
         remove_file = 'd',
         add_file = '@',
         close = { '<Esc>', 'q' },
-        close_from_input = nil, -- e.g., { normal = "<Esc>", insert = "<C-d>" }
+        close_from_input = { '<Esc>' }, -- e.g., { normal = "<Esc>", insert = "<C-d>" }
       },
     },
     hints = { enabled = true },
@@ -87,9 +90,9 @@ return {
       ---@type "right" | "left" | "top" | "bottom"
       position = 'right', -- the position of the sidebar
       wrap = true, -- similar to vim.o.wrap
-      width = 30, -- default % based on available width
+      width = 35, -- default % based on available width
       sidebar_header = {
-        enabled = false, -- true, false to enable/disable the header
+        enabled = true, -- true, false to enable/disable the header
         align = 'center', -- left, center, right for title
         rounded = true,
       },
@@ -97,6 +100,9 @@ return {
     suggestion = {
       debounce = 600,
       throttle = 600,
+    },
+    web_search_engine = {
+      provider = 'tavily',
     },
   },
   dependencies = {

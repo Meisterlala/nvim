@@ -1,6 +1,7 @@
 # Winget requirements
 $wingetRequirements = @(
     @{ Name = "Zig"; Id = "zig.zig" }
+    @{ Name = "Rip Grep"; Id = "BurntSushi.ripgrep.GNU" }
 )
 
 # Check if nvim is installed
