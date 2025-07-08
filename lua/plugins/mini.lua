@@ -1,88 +1,15 @@
-local nvim_config_git_status = ''
-local git_check_in_progress = false
-
-local function refresh_nvim_config_git_status()
-  -- Prevent multiple simultaneous Git checks
-  if git_check_in_progress then
-    return
-  end
-  git_check_in_progress = true
-
-  local nvim_config_path = vim.fn.stdpath 'config'
-
-  -- Verify nvim config directory exists
-  if vim.fn.isdirectory(nvim_config_path) == 0 then
-    nvim_config_git_status = 'Config Dir Not Found!'
-    git_check_in_progress = false
-    return
-  end
-
-  -- Get current Git branch
-  vim.fn.jobstart({
-    'git',
-    '-C',
-    nvim_config_path,
-    'rev-parse',
-    '--abbrev-ref',
-    'HEAD',
-  }, {
-    stdout_buffered = true,
-    on_stdout = function(_, branch_output)
-      local current_branch = (branch_output[1] or ''):gsub('\n', '')
-
-      if current_branch == '' then
-        nvim_config_git_status = 'Not a Git Repo!'
-        git_check_in_progress = false
-        vim.cmd 'redrawstatus'
-        return
-      end
-
-      -- Check for uncommitted changes
-      vim.fn.jobstart({
-        'git',
-        '-C',
-        nvim_config_path,
-        'status',
-        '--porcelain',
-      }, {
-        stdout_buffered = true,
-        on_stdout = function(_, status_output)
-          local has_uncommitted_changes = #status_output > 1 or (status_output[1] and status_output[1] ~= '')
-
-          -- Build status message
-          local status_message = '⚡ nvim config updated'
-          if current_branch ~= 'master' and current_branch ~= 'main' then
-            status_message = status_message .. ' (' .. current_branch .. ')'
-          end
-
-          nvim_config_git_status = has_uncommitted_changes and status_message or ''
-          git_check_in_progress = false
-          vim.cmd 'redrawstatus'
-        end,
-        on_exit = function()
-          git_check_in_progress = false
-        end,
-      })
-    end,
-    on_exit = function()
-      git_check_in_progress = false
-    end,
-  })
-end
+local sync = require 'sync'
 
 return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
-    -- Update nvim git status and then call it initally
-    local function get_nvim_config_git_status()
-      return nvim_config_git_status
-    end
-    refresh_nvim_config_git_status()
+    -- Initialize and update nvim git status using sync module
+    sync.refresh_nvim_config_git_status()
 
     -- Trigger Git status check when nvim config files are saved
     vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
       pattern = vim.fn.stdpath 'config' .. '/*',
-      callback = refresh_nvim_config_git_status,
+      callback = sync.refresh_nvim_config_git_status,
     })
 
     -- Better Around/Inside textobjects
@@ -117,7 +44,7 @@ return { -- Collection of various small independent plugins/modules
           local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
           local location = MiniStatusline.section_location { trunc_width = 75 }
           local search = MiniStatusline.section_searchcount { trunc_width = 75 }
-          local git_status = get_nvim_config_git_status()
+          local git_status = sync.get_nvim_config_git_status()
 
           return MiniStatusline.combine_groups {
             { hl = mode_hl, strings = { mode } },
