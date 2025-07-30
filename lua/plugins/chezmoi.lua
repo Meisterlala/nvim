@@ -5,7 +5,7 @@ return {
     -- Auto run chezmoi apply
     --  e.g. ~/.local/share/chezmoi/*
     vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
-      pattern = { os.getenv 'HOME' .. '/.local/share/chezmoi/*' },
+      pattern = { vim.fn.expand '~/.local/share/chezmoi/' .. '*' },
       callback = function(ev)
         local bufnr = ev.buf
         local edit_watch = function()
@@ -18,7 +18,7 @@ return {
     require('chezmoi').setup {
       {
         edit = {
-          watch = false,
+          watch = true,
           force = false,
         },
         events = {
