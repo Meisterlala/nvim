@@ -95,7 +95,7 @@ function M.commit_and_push_config_changes()
     return
   end
   M.commit_is_running = true
-  vim.notify 'Uploading config to remote repo'
+  vim.notify 'Pushing config to remote repo...'
 
   local config_dir = vim.fn.stdpath 'config'
   local git_executable = vim.fn.executable 'git'
