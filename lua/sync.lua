@@ -74,6 +74,8 @@ end
 vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
   pattern = {
     vim.fn.stdpath 'config' .. '*',
+    vim.fn.stdpath 'config' .. '**/*',
+    vim.fn.stdpath 'config' .. '**\\*',
     '*/nvim/**/*',
     '*\\nvim\\**\\*',
   },
@@ -93,6 +95,7 @@ function M.commit_and_push_config_changes()
     return
   end
   M.commit_is_running = true
+  vim.notify 'Uploading config to remote repo'
 
   local config_dir = vim.fn.stdpath 'config'
   local git_executable = vim.fn.executable 'git'
