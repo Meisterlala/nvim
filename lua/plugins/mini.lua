@@ -28,17 +28,6 @@ return { -- Collection of various small independent plugins/modules
     -- Initialize and update nvim git status using sync module
     sync.refresh_nvim_config_git_status()
 
-    -- Trigger Git status check when nvim config files are saved
-    vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
-      pattern = {
-        vim.fn.stdpath 'config' .. '*',
-        '*nvim/**/*',
-      },
-      callback = function()
-        require('sync').refresh_nvim_config_git_status()
-      end,
-    })
-
     -- Better Around/Inside textobjects
     --
     -- Examples:

@@ -131,8 +131,8 @@ vim.opt.splitbelow = true -- Horizontal splits open below
 -- See :help vim.keymap.set
 
 -- Set up config sync via Lua module (see lua/sync.lua)
-require 'sync'
-vim.keymap.set('n', '<leader>u', '<cmd>ConfigPush<CR>', { desc = '[U]pload the nvim config to GitHub' })
+local nimv_sync = require 'sync'
+vim.keymap.set('n', '<leader>u', nimv_sync.commit_and_push_config_changes, { desc = '[U]pload the nvim config to GitHub' })
 
 -- Pressing <Esc> in normal mode will clear search highlighting
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
