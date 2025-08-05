@@ -1,5 +1,4 @@
 -- sync.lua: Neovim config git utilities
-
 local M = {}
 
 -- Internal state for nvim config git status
@@ -70,6 +69,18 @@ end
 function M.get_nvim_config_git_status()
   return nvim_config_git_status
 end
+
+-- Trigger Git status check when nvim config files are saved
+vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
+  pattern = {
+    vim.fn.stdpath 'config' .. '*',
+    '*/nvim/**/*',
+    '*\\nvim\\**\\*',
+  },
+  callback = function()
+    require('sync').refresh_nvim_config_git_status()
+  end,
+})
 
 ---
 ---
