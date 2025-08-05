@@ -80,12 +80,9 @@ vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
     '*\\nvim\\**\\*',
   },
   callback = function()
-    require('sync').refresh_nvim_config_git_status()
+    M.refresh_nvim_config_git_status()
   end,
 })
-
----
----
 
 -- Commit and push changes in the nvim config git repo
 function M.commit_and_push_config_changes()
@@ -155,6 +152,7 @@ function M.commit_and_push_config_changes()
   end)
 end
 
-vim.api.nvim_create_user_command('ConfigPush', M.commit_and_push_config_changes, {})
+vim.api.nvim_create_user_command('SyncConfigPush', M.commit_and_push_config_changes, {})
+vim.api.nvim_create_user_command('SyncUpdateStatus', M.refresh_nvim_config_git_status, {})
 
 return M
