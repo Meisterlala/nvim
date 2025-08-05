@@ -81,7 +81,7 @@ vim.opt.termguicolors = true -- Enable 24-bit colors
 vim.opt.signcolumn = 'yes' -- Always show sign column
 vim.opt.list = true -- Show tabs, trailing spaces, etc.
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
-vim.opt.colorcolumn = '100' -- Show column at 100 characters
+vim.opt.colorcolumn = '' -- Dont show a line at 100 Characters long
 vim.opt.showmatch = true -- Highlight matching brackets
 vim.opt.matchtime = 2 -- How long to show matching bracket
 vim.opt.cmdheight = 1 -- Command line height
@@ -98,7 +98,8 @@ vim.opt.synmaxcol = 3000 -- Syntax highlighting limit
 -- File handling
 vim.opt.backup = false -- Don't create backup files
 vim.opt.writebackup = false -- Don't create backup before writing
-vim.opt.swapfile = false -- Don't create swap files
+vim.opt.swapfile = true -- Don't create swap files
+vim.opt.directory = vim.fn.expand '~/.vim/swapdir' -- Swap director
 vim.opt.undofile = true -- Persistent undo
 vim.opt.undodir = vim.fn.expand '~/.vim/undodir' -- Undo directory
 vim.opt.updatetime = 300 -- Faster completion
@@ -145,9 +146,9 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- Close and Save with leader
-vim.keymap.set('n', '<leader>m', ':update<CR>', { desc = 'Write File' })
-vim.keymap.set('n', '<leader>M', ':w !sudo tee %<CR>', { desc = 'Write File with sudo' })
-vim.keymap.set('n', '<leader>n', ':quit<CR>', { desc = 'Quit File' })
+vim.keymap.set('n', '<leader>m', '<cmd>update<CR>', { desc = 'Write File', silent = true })
+vim.keymap.set('n', '<leader>M', '<cmd>w !sudo tee %:p:S >/dev/null | setlocal nomodified<CR>>', { desc = 'Write File with sudo', silent = true })
+vim.keymap.set('n', '<leader>n', '<cmd>quit<CR>', { desc = 'Quit File', silent = true })
 
 -- Keybinds for fast window navigation with Ctrl+Arrow keys
 -- See :help wincmd for details on window commands
@@ -171,6 +172,16 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
   callback = function()
     vim.highlight.on_yank()
+  end,
+})
+
+-- [[ Automatically jump to last opened line when opening a file ]]
+-- Restore cursor position
+vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
+  desc = 'Jump to the last Position when the file was closed',
+  pattern = { '*' },
+  callback = function()
+    vim.api.nvim_exec2('silent! normal! g`"zv', { output = false })
   end,
 })
 
