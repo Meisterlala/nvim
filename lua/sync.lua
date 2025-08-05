@@ -57,6 +57,9 @@ function M.refresh_nvim_config_git_status()
       end
 
       M.nvim_config_git_status = has_uncommitted_changes and status_message or ''
+      vim.schedule(function()
+        vim.cmd 'redrawstatus'
+      end)
       M.git_check_in_progress = false
     end)
   end)
@@ -102,26 +105,21 @@ function M.commit_and_push_config_changes()
     return
   end
 
-  local current_dir = vim.fn.getcwd()
-  vim.fn.chdir(config_dir)
-
   -- Check for changes (async)
-  vim.system({ 'git', 'diff', '--quiet' }, { text = true }, function(obj)
+  vim.system({ 'git', 'diff', '--quiet' }, { text = true, cwd = config_dir }, function(obj)
     if obj.code == 0 then
       vim.schedule(function()
         vim.notify('No changes to commit.', vim.log.levels.INFO)
-        vim.fn.chdir(current_dir)
         M.commit_is_running = false
       end)
       return
     end
 
     -- Stage changes
-    vim.system({ 'git', 'add', '.' }, { text = true }, function(add_obj)
+    vim.system({ 'git', 'add', '.' }, { text = true, cwd = config_dir }, function(add_obj)
       if add_obj.code ~= 0 then
         vim.schedule(function()
           vim.notify('Failed to add changes:\n' .. add_obj.stderr, vim.log.levels.ERROR)
-          vim.fn.chdir(current_dir)
           M.commit_is_running = false
         end)
         return
@@ -129,29 +127,27 @@ function M.commit_and_push_config_changes()
 
       -- Commit
       local timestamp = tostring(os.date '%Y-%m-%d-%H:%M:%S')
-      vim.system({ 'git', 'commit', '-m', timestamp }, { text = true }, function(commit_obj)
+      vim.system({ 'git', 'commit', '-m', timestamp }, { text = true, cwd = config_dir }, function(commit_obj)
         if commit_obj.code ~= 0 then
           vim.schedule(function()
             vim.notify('Failed to commit:\n' .. commit_obj.stderr, vim.log.levels.ERROR)
-            vim.fn.chdir(current_dir)
             M.commit_is_running = false
           end)
           return
         end
 
         -- Push
-        vim.system({ 'git', 'push' }, { text = true }, function(push_obj)
+        vim.system({ 'git', 'push' }, { text = true, cwd = config_dir }, function(push_obj)
           vim.schedule(function()
             if push_obj.code ~= 0 then
               vim.notify('Failed to push:\n' .. push_obj.stderr, vim.log.levels.ERROR)
             else
               vim.notify('Config changes committed and pushed.', vim.log.levels.INFO)
-              if M.refresh_nvim_config_git_status then
-                M.refresh_nvim_config_git_status()
-              end
             end
-            vim.fn.chdir(current_dir)
             M.commit_is_running = false
+            if M.refresh_nvim_config_git_status then
+              M.refresh_nvim_config_git_status()
+            end
           end)
         end)
       end)
