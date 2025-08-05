@@ -1,73 +1,70 @@
 -- sync.lua: Neovim config git utilities
 local M = {}
 
--- Internal state for nvim config git status
-local nvim_config_git_status = ''
-local git_check_in_progress = false
+-- Define internal state within M
+M.nvim_config_git_status = ''
+M.git_check_in_progress = false
+M.commit_is_running = false
 
--- Refresh nvim config git status
 function M.refresh_nvim_config_git_status()
-  if git_check_in_progress then
+  if M.git_check_in_progress then
     return
   end
-  git_check_in_progress = true
+  M.git_check_in_progress = true
 
   local nvim_config_path = vim.fn.stdpath 'config'
   if vim.fn.isdirectory(nvim_config_path) == 0 then
-    nvim_config_git_status = 'Config Dir Not Found!'
-    git_check_in_progress = false
+    M.nvim_config_git_status = 'Config Dir Not Found!'
+    M.git_check_in_progress = false
+    vim.cmd 'redrawstatus'
     return
   end
 
-  vim.fn.jobstart({
-    'git',
-    '-C',
-    nvim_config_path,
-    'rev-parse',
-    '--abbrev-ref',
-    'HEAD',
-  }, {
-    stdout_buffered = true,
-    on_stdout = function(_, branch_output)
-      local current_branch = (branch_output[1] or ''):gsub('\n', '')
-      if current_branch == '' then
-        nvim_config_git_status = 'Not a Git Repo!'
-        git_check_in_progress = false
-        vim.cmd 'redrawstatus'
+  -- Check for the current git branch
+  vim.system({ 'git', '-C', nvim_config_path, 'rev-parse', '--abbrev-ref', 'HEAD' }, {
+    text = true,
+  }, function(branch_result)
+    if branch_result.code ~= 0 then
+      -- On failure to get the branch
+      M.nvim_config_git_status = 'Failed to fetch branch'
+      M.git_check_in_progress = false
+      return
+    end
+
+    local current_branch = (branch_result.stdout or ''):gsub('\n', '')
+    if current_branch == '' then
+      M.nvim_config_git_status = 'Not a Git Repo!'
+      M.git_check_in_progress = false
+      return
+    end
+
+    -- Check the git status for uncommitted changes
+    vim.system({ 'git', '-C', nvim_config_path, 'status', '--porcelain' }, {
+      text = true,
+    }, function(status_result)
+      -- On failure to get git status
+      if status_result.code ~= 0 then
+        M.nvim_config_git_status = 'Failed to fetch status'
+        M.git_check_in_progress = false
         return
       end
-      vim.fn.jobstart({
-        'git',
-        '-C',
-        nvim_config_path,
-        'status',
-        '--porcelain',
-      }, {
-        stdout_buffered = true,
-        on_stdout = function(_, status_output)
-          local has_uncommitted_changes = #status_output > 1 or (status_output[1] and status_output[1] ~= '')
-          local status_message = '⚡ nvim config updated'
-          if current_branch ~= 'master' and current_branch ~= 'main' then
-            status_message = status_message .. ' (' .. current_branch .. ')'
-          end
-          nvim_config_git_status = has_uncommitted_changes and status_message or ''
-          git_check_in_progress = false
-          vim.cmd 'redrawstatus'
-        end,
-        on_exit = function()
-          git_check_in_progress = false
-        end,
-      })
-    end,
-    on_exit = function()
-      git_check_in_progress = false
-    end,
-  })
+
+      local has_uncommitted_changes = #status_result.stdout > 0
+      local status_message = '⚡ nvim config updated'
+
+      if current_branch ~= 'master' and current_branch ~= 'main' then
+        status_message = status_message .. ' (' .. current_branch .. ')'
+      end
+
+      M.nvim_config_git_status = has_uncommitted_changes and status_message or ''
+      M.git_check_in_progress = false
+    end)
+  end)
 end
 
 --- Get current nvim config git status string
 function M.get_nvim_config_git_status()
-  return nvim_config_git_status
+  return M.nvim_config_git_status
 end
 
 -- Trigger Git status check when nvim config files are saved
@@ -87,7 +84,6 @@ vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
 ---
 ---
 
-M.commit_is_running = false
 -- Commit and push changes in the nvim config git repo
 function M.commit_and_push_config_changes()
   if M.commit_is_running then
