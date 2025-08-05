@@ -54,46 +54,72 @@ vim.g.have_nerd_font = true
 
 -- [[ Editor and UI Options ]]
 
--- Line Numbers
-vim.opt.number = true -- Show absolute line numbers
--- vim.opt.relativenumber = true          -- (Optional) Show relative line numbers for navigation
+-- Basic settings
+vim.opt.number = true -- Line numbers
+vim.opt.relativenumber = true -- Relative line numbers
+vim.opt.cursorline = true -- Highlight current line
+vim.opt.wrap = true -- wrap lines
+vim.opt.scrolloff = 10 -- Keep 10 lines above/below cursor
+vim.opt.sidescrolloff = 8 -- Keep 8 columns left/right of cursor
 
--- Window Splitting
-vim.opt.splitright = true -- Vertical splits open to the right
-vim.opt.splitbelow = true -- Horizontal splits open below
+-- Indentation
+vim.opt.tabstop = 2 -- Tab width
+vim.opt.shiftwidth = 2 -- Indent width
+vim.opt.softtabstop = 2 -- Soft tab stop
+vim.opt.expandtab = true -- Use spaces instead of tabs
+vim.opt.smartindent = true -- Smart auto-indenting
+vim.opt.autoindent = true -- Copy indent from current line
 
--- Mouse and Cursor
-vim.opt.mouse = 'a' -- Enable mouse in all modes
-vim.opt.cursorline = true -- Highlight the line with the cursor
+-- Search settings
+vim.opt.ignorecase = true -- Case insensitive search
+vim.opt.smartcase = true -- Case sensitive if uppercase in search
+vim.opt.hlsearch = true -- highlight search results
+vim.opt.incsearch = true -- Show matches as you type
 
--- Display Options
-vim.opt.signcolumn = 'yes' -- Always show signcolumn to prevent text shifting
+-- Visual settings
+vim.opt.termguicolors = true -- Enable 24-bit colors
+vim.opt.signcolumn = 'yes' -- Always show sign column
 vim.opt.list = true -- Show tabs, trailing spaces, etc.
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+vim.opt.colorcolumn = '100' -- Show column at 100 characters
+vim.opt.showmatch = true -- Highlight matching brackets
+vim.opt.matchtime = 2 -- How long to show matching bracket
+vim.opt.cmdheight = 1 -- Command line height
+vim.opt.completeopt = 'menuone,noinsert,noselect' -- Completion options
+vim.opt.showmode = false -- Don't show mode in command line
+vim.opt.pumheight = 10 -- Popup menu height
+vim.opt.pumblend = 10 -- Popup menu transparency
+vim.opt.winblend = 0 -- Floating window transparency
+vim.opt.conceallevel = 0 -- Don't hide markup
+vim.opt.concealcursor = '' -- Don't hide cursor line markup
+vim.opt.lazyredraw = true -- Don't redraw during macros
+vim.opt.synmaxcol = 3000 -- Syntax highlighting limit
 
--- Search
-vim.opt.ignorecase = true -- Case-insensitive search...
-vim.opt.smartcase = true -- ...unless pattern has uppercase or \C
-
--- Indentation and Wrapping
-vim.opt.breakindent = true -- Wrapped lines get extra indentation
-
--- Undo and File Handling
-vim.opt.undofile = true -- Save undo history to disk
+-- File handling
+vim.opt.backup = false -- Don't create backup files
+vim.opt.writebackup = false -- Don't create backup before writing
+vim.opt.swapfile = false -- Don't create swap files
+vim.opt.undofile = true -- Persistent undo
+vim.opt.undodir = vim.fn.expand '~/.vim/undodir' -- Undo directory
+vim.opt.updatetime = 300 -- Faster completion
+vim.opt.timeoutlen = 500 -- Key timeout duration
+vim.opt.ttimeoutlen = 0 -- Key code timeout
+vim.opt.autoread = true -- Auto reload files changed outside vim
+vim.opt.autowrite = false -- Don't auto save
 vim.opt.confirm = true -- Prompt to save changes instead of failing
 
--- Responsiveness
-vim.opt.updatetime = 250 -- Faster CursorHold update
-vim.opt.timeoutlen = 300 -- Faster mapped sequence timeout
-
--- Substitute Preview
-vim.opt.inccommand = 'split' -- Live preview for :substitute
-
--- Keep lines above/below cursor
-vim.opt.scrolloff = 10
-
--- Don't show mode (already in statusline)
-vim.opt.showmode = false
+-- Behavior settings
+vim.opt.hidden = true -- Allow hidden buffers
+vim.opt.errorbells = false -- No error bells
+vim.opt.backspace = 'indent,eol,start' -- Better backspace behavior
+vim.opt.autochdir = false -- Don't auto change directory
+vim.opt.iskeyword:append '-' -- Treat dash as part of word
+vim.opt.selection = 'exclusive' -- Selection behavior
+vim.opt.mouse = 'a' -- Enable mouse support
+vim.opt.modifiable = true -- Allow buffer modifications
+vim.opt.encoding = 'UTF-8' -- Set encoding
+vim.opt.splitright = true -- Vertical splits open to the right
+vim.opt.splitbelow = true -- Horizontal splits open below
 
 -- [[ Clipboard Integration (optional) ]]
 --vim.schedule(function()
@@ -101,8 +127,6 @@ vim.opt.showmode = false
 --end)
 
 -- [[ Basic Keymaps ]]
---
--- Most keymaps are set using vim.keymap.set({mode}, {lhs}, {rhs}, {opts})
 -- See :help vim.keymap.set
 
 -- Set up config sync via Lua module (see lua/sync.lua)
@@ -110,7 +134,6 @@ require 'sync'
 vim.keymap.set('n', '<leader>u', ':ConfigPush<CR>', { desc = '[U]pload the nvim config to GitHub' })
 
 -- Pressing <Esc> in normal mode will clear search highlighting
--- See :help hlsearch
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
@@ -121,11 +144,10 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- Helpful for terminal users new to Neovim
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
--- TIP: Uncomment to disable arrow keys in normal mode, encouraging hjkl movement
--- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
--- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
--- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
--- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+-- Close and Save with leader
+vim.keymap.set('n', '<leader>m', ':update<CR>', { desc = 'Write File' })
+vim.keymap.set('n', '<leader>M', ':w !sudo tee %<CR>', { desc = 'Write File with sudo' })
+vim.keymap.set('n', '<leader>n', ':quit<CR>', { desc = 'Quit File' })
 
 -- Keybinds for fast window navigation with Ctrl+Arrow keys
 -- See :help wincmd for details on window commands
@@ -139,7 +161,6 @@ vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
 vim.keymap.set('n', '<PageDown>', '<C-d>', { desc = 'Scroll down half a page' })
 
 -- [[ Basic Autocommands ]]
---
 -- See :help lua-guide-autocommands for details on autocommand usage.
 
 -- Highlight yanked (copied) text briefly for visual feedback
@@ -154,7 +175,6 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 })
 
 -- [[ Install and Bootstrap `lazy.nvim` Plugin Manager ]]
---
 -- This block ensures lazy.nvim is installed to manage all other plugins.
 -- See :help lazy.nvim.txt or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
