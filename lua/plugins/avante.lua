@@ -14,11 +14,17 @@ return {
   ---@module 'avante'
   ---@type avante.Config
   opts = {
-    provider = 'copilot',
+    provider = 'openrouter',
     auto_suggestions_provider = 'copilot',
     providers = {
       copilot = {
         model = 'gpt-4.1',
+      },
+      openrouter = {
+        __inherited_from = 'openai',
+        endpoint = 'https://openrouter.ai/api/v1',
+        model = 'openrouter/horizon-beta',
+        api_key_name = 'AVANTE_OPENROUTER',
       },
     },
     behaviour = {
