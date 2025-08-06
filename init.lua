@@ -96,11 +96,13 @@ vim.opt.lazyredraw = true -- Don't redraw during macros
 vim.opt.synmaxcol = 3000 -- Syntax highlighting limit
 
 -- File handling
-vim.opt.backup = false -- Don't create backup files
-vim.opt.writebackup = false -- Don't create backup before writing
+vim.opt.backup = true -- Don't create backup files
+vim.opt.writebackup = true -- Don't create backup before writing
+vim.opt.backupdir = vim.fn.expand '~/.vim/backdir' -- backup director
 vim.opt.swapfile = true -- Don't create swap files
 vim.opt.directory = vim.fn.expand '~/.vim/swapdir' -- Swap director
 vim.opt.undofile = true -- Persistent undo
+vim.opt.undolevels = 50000 -- Amount of undus to save
 vim.opt.undodir = vim.fn.expand '~/.vim/undodir' -- Undo directory
 vim.opt.updatetime = 300 -- Faster completion
 vim.opt.timeoutlen = 500 -- Key timeout duration
