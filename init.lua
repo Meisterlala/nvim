@@ -233,6 +233,7 @@ require('lazy').setup({
       lazy = '💤 ',
     },
   },
+  rocks = { enabled = false, hererocks = false },
 })
 
 -- The line beneath this is called `modeline`.
