@@ -89,7 +89,8 @@ return {
         close_from_input = { '<Esc>' }, -- e.g., { normal = "<Esc>", insert = "<C-d>" }
       },
     },
-    hints = { enabled = true },
+    --- @class AvanteHintsConfig
+    hints = { enabled = false },
     windows = {
       ---@type "right" | "left" | "top" | "bottom"
       position = 'right', -- the position of the sidebar
