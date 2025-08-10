@@ -236,6 +236,43 @@ require('lazy').setup({
   rocks = { enabled = false, hererocks = false },
 })
 
+vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
+  callback = function(ev)
+    local bufnr = ev.buf
+    local bufname = vim.api.nvim_buf_get_name(bufnr)
+    local filepath = vim.fn.fnamemodify(bufname, ':p') -- Get full path
+
+    require('plenary.job')
+      :new({
+        command = 'chezmoi',
+        args = { 'managed' },
+        on_exit = function(job, exit_code)
+          if exit_code ~= 0 then
+            return
+          end
+
+          local result = job:result()
+          local home = os.getenv 'HOME'
+
+          for _, managed_file in ipairs(result) do
+            if managed_file ~= '' then
+              local managed_filepath = home .. '/' .. managed_file
+              if filepath == managed_filepath then
+                -- Defer only the required watch call
+                vim.schedule(function()
+                  require('chezmoi.commands.__edit').watch(bufnr)
+                end)
+                -- Optional: break loop once matched
+                break
+              end
+            end
+          end
+        end,
+      })
+      :start()
+  end,
+})
+
 -- The line beneath this is called `modeline`.
 -- It helps some editors detect and respect this file's indentation settings.
 -- See :help modeline
