@@ -22,7 +22,9 @@ local function sync_git_status()
   return sync_mod.get_nvim_config_git_status() or ''
 end
 
--- Really hacky to have this here
+-- Cache variable outside the function to persist between calls
+local cached_managed_files = nil
+
 local function chezmoi_file()
   local current_file = vim.fn.expand '%:p' -- Full path of the current file
   local home_dir = vim.env.HOME -- Get the home directory
@@ -38,21 +40,26 @@ local function chezmoi_file()
     return ''
   end
 
-  local managed_files = chezmoi.list()
-  for _, file in ipairs(managed_files) do
+  -- Use cached managed files if available, otherwise fetch and cache
+  if not cached_managed_files then
+    cached_managed_files = chezmoi.list {}
+  end
+
+  for _, file in ipairs(cached_managed_files) do
     local full_managed_path = home_dir .. '/' .. file
     if full_managed_path == current_file then
       local edit_watch = function()
         vim.notify 'You opened a file that is managed by chezmoi'
-        require('chezmoi.commands').edit {
+        chezmoi.edit {
           targets = { current_file },
-          args = { '--watch', '--appyl' },
+          args = { '--watch', '--apply' },
         }
       end
       vim.schedule(edit_watch)
       return 'Chezmoi File'
     end
   end
+
   return ''
 end
 
