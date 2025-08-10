@@ -23,7 +23,7 @@ return {
       openrouter = {
         __inherited_from = 'openai',
         endpoint = 'https://openrouter.ai/api/v1',
-        model = 'openrouter/horizon-beta',
+        model = 'qwen/qwen3-coder',
         api_key_name = 'AVANTE_OPENROUTER',
       },
     },
