@@ -32,6 +32,7 @@ return { -- Autoformat
       lua = { 'stylua' },
       json = { 'prettierd' },
       jsonc = { 'prettierd' },
+      css = { 'prettierd' },
       -- Conform can also run multiple formatters sequentially
       -- python = { "isort", "black" },
       --
