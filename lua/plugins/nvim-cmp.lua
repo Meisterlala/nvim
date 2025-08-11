@@ -28,11 +28,10 @@ return { -- Autocompletion
     },
     'saadparwaiz1/cmp_luasnip',
 
-    -- Adds other completion capabilities.
-    --  nvim-cmp does not ship with all sources by default. They are split
-    --  into multiple repos for maintenance purposes.
     'hrsh7th/cmp-nvim-lsp',
+    'hrsh7th/cmp-buffer',
     'hrsh7th/cmp-path',
+    'hrsh7th/cmp-cmdline',
     'hrsh7th/cmp-nvim-lsp-signature-help',
   },
   config = function()
@@ -46,7 +45,14 @@ return { -- Autocompletion
           luasnip.lsp_expand(args.body)
         end,
       },
-      completion = { completeopt = 'menu,menuone,noinsert' },
+      completion = {
+        keyword_length = 1,
+        completeopt = 'menu,menuone,noinsert',
+        autocomplete = {
+          cmp.TriggerEvent.TextChanged,
+          cmp.TriggerEvent.InsertEnter,
+        },
+      },
 
       -- For an understanding of why these mappings were
       -- chosen, you will need to read `:help ins-completion`
@@ -112,5 +118,29 @@ return { -- Autocompletion
         { name = 'nvim_lsp_signature_help' },
       },
     }
+
+    -- `/` cmdline setup.
+    cmp.setup.cmdline({ '/', '?' }, {
+      mapping = cmp.mapping.preset.cmdline(),
+      sources = {
+        { name = 'buffer' },
+      },
+    })
+
+    -- `:` cmdline setup.
+    cmp.setup.cmdline(':', {
+      mapping = cmp.mapping.preset.cmdline(),
+      sources = cmp.config.sources({
+        { name = 'path' },
+      }, {
+        {
+          name = 'cmdline',
+          option = {
+            ignore_cmds = { 'Man', '!' },
+          },
+        },
+        matching = { disallow_symbol_nonprefix_matching = false },
+      }),
+    })
   end,
 }
