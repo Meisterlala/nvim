@@ -5,7 +5,7 @@ return {
   config = function()
     ---@diagnostic disable-next-line: missing-fields
     require('catppuccin').setup {
-      flacour = 'frappe',
+      flavour = 'mocha',
       transparent_background = false,
       auto_integrations = true,
       float = {
