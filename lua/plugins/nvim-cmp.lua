@@ -45,12 +45,27 @@ return { -- Autocompletion
           luasnip.lsp_expand(args.body)
         end,
       },
+
       completion = {
         keyword_length = 1,
         completeopt = 'menu,menuone,noinsert',
         autocomplete = {
           cmp.TriggerEvent.TextChanged,
           cmp.TriggerEvent.InsertEnter,
+        },
+      },
+
+      -- Apperances
+      window = {
+        completion = cmp.config.window.bordered(),
+        documentation = {
+          border = 'solid',
+        },
+      },
+
+      view = {
+        docs = {
+          auto_open = true,
         },
       },
 
