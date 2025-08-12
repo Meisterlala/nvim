@@ -124,6 +124,8 @@ vim.opt.encoding = 'UTF-8' -- Set encoding
 vim.opt.splitright = true -- Vertical splits open to the right
 vim.opt.splitbelow = true -- Horizontal splits open below
 
+vim.opt.laststatus = 3 -- Statusline confit
+
 -- [[ Clipboard Integration (optional) ]]
 --vim.schedule(function()
 --  vim.opt.clipboard = 'unnamedplus'     -- Uncomment to use the system clipboard
