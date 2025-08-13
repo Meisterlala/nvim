@@ -18,7 +18,7 @@ return {
   ---@type neotree.Config?
   opts = {
     filesystem = {
-      hijack_netrw_behavior = 'open_current',
+      hijack_netrw_behavior = 'disabled',
       window = {
         mappings = {
           ['ß'] = 'close_window',
