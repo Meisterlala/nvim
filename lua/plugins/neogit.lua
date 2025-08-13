@@ -23,6 +23,8 @@ return {
           interval = 1000,
           enabled = true,
         },
+        -- Change the default way of opening neogit
+        kind = 'split_below',
         -- Show message with spinning animation when a git command is running.
         process_spinner = true,
         -- Used to generate URL's for branch popup action "pull request".
@@ -34,10 +36,13 @@ return {
         },
         -- Allows a different telescope sorter. Defaults to 'fuzzy_with_index_bias'. The example below will use the native fzf
         -- sorter instead. By default, this function returns `nil`.
-        telescope_sorter = function()
-          return require('telescope').extensions.fzf.native_fzf_sorter()
-        end,
+        -- telescope_sorter = function()
+        --   return require('telescope').extensions.fzf.native_fzf_sorter()
+        -- end,
       }
     end,
+    keys = {
+      { '<leader>g', '<cmd>Neogit<cr>', desc = 'Open Neogit' },
+    },
   },
 }
