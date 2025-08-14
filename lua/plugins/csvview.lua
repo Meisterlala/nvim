@@ -1,7 +1,13 @@
 -- Automatically enable CsvView for CSV files
-vim.api.nvim_create_autocmd('FileType', {
-  pattern = 'csv',
-  command = 'CsvViewEnable',
+vim.api.nvim_create_autocmd('BufReadPost', {
+  pattern = '*.csv',
+  callback = function(arg)
+    local stat = vim.uv.fs_stat(arg.file)
+    local max_size_mb = 10
+    if stat and stat.size < (1024 * 1024 * max_size_mb) then
+      vim.cmd 'CsvViewEnable'
+    end
+  end,
 })
 
 return {
@@ -9,7 +15,10 @@ return {
   ---@module "csvview"
   ---@type CsvView.Options
   opts = {
-    parser = { comments = { '#', '//' } },
+    parser = {
+      comments = { '#', '//' },
+      async_chunksize = 20,
+    },
     view = {
       display_mode = 'border',
     },
