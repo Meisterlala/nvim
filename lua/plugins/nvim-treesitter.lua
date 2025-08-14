@@ -9,20 +9,26 @@ return { -- Highlight, edit, and navigate code
     vim.opt.rtp:prepend(install_dir)
 
     -- load configs module
-    local configs = require 'nvim-treesitter'
+    local configs = require 'nvim-treesitter.configs'
+    ---@diagnostic disable-next-line: missing-fields
     configs.setup {
       ensure_installed = { 'c', 'diff', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
       auto_install = true,
       -- Modules
       highlight = {
         enable = true,
+
+        -- Disable treesitter for large files
+        disable = function(_, buf)
+          local max_size_mb = 20
+          local ok, stats = pcall(vim.uv.fs_stat, vim.api.nvim_buf_get_name(buf))
+          if ok and stats and stats.size > (max_size_mb * 1024 * 1024) then
+            return true
+          end
+        end,
+        -- Disable vim regex
+        additional_vim_regex_highlighting = false,
       },
     }
   end,
-  -- There are additional nvim-treesitter modules that you can use to interact
-  -- with nvim-treesitter. You should go explore a few and see what interests you:
-  --
-  --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-  --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-  --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
 }
