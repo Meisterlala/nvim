@@ -93,7 +93,8 @@ vim.opt.winblend = 0 -- Floating window transparency
 vim.opt.conceallevel = 0 -- Don't hide markup
 vim.opt.concealcursor = '' -- Don't hide cursor line markup
 -- vim.opt.lazyredraw = true -- Don't redraw during macros
-vim.opt.synmaxcol = 3000 -- Syntax highlighting limit
+vim.opt.synmaxcol = 300 -- Syntax highlighting limit
+vim.cmd.syntax 'off' -- turn off syntax
 
 -- File handling
 vim.opt.backup = true -- Don't create backup files
