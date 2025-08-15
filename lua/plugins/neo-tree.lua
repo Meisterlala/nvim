@@ -17,7 +17,7 @@ return {
   ---@module "neo-tree"
   ---@type neotree.Config?
   opts = {
-    close_if_last_window = false, -- Close Neo-tree if it is the last window left in the tab
+    close_if_last_window = true, -- Close Neo-tree if it is the last window left in the tab
     filesystem = {
       hijack_netrw_behavior = 'open_default',
       use_libuv_file_watcher = true, -- Use filesystem watcht to look for changes
@@ -25,6 +25,12 @@ return {
         mappings = {
           ['ß'] = 'close_window',
         },
+      },
+    },
+    window = {
+      mappings = {
+        ['<space>'] = nil,
+        ['<tab>'] = 'toggle_node',
       },
     },
     default_component_configs = {
