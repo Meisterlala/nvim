@@ -42,7 +42,7 @@ return {
       indent = { enabled = false },
       input = { enabled = true },
       git = { enabled = false },
-      image = { enabled = true },
+      image = { enabled = false },
       quickfile = { enabled = true },
     },
   },
