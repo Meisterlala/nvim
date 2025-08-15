@@ -3,6 +3,7 @@ return {
     'folke/snacks.nvim',
     priority = 900, -- High, but after colors
     lazy = false,
+    ---@module "snacks"
     ---@class snacks.Config
     ---@field animate? snacks.animate.Config
     ---@field bigfile? snacks.bigfile.Config
@@ -10,7 +11,6 @@ return {
     ---@field dim? snacks.dim.Config
     ---@field explorer? snacks.explorer.Config
     ---@field gitbrowse? snacks.gitbrowse.Config
-    ---@field image? snacks.image.Config
     ---@field indent? snacks.indent.Config
     ---@field input? snacks.input.Config
     ---@field layout? snacks.layout.Config
@@ -28,22 +28,43 @@ return {
     ---@field win? snacks.win.Config
     ---@field words? snacks.words.Config
     ---@field zen? snacks.zen.Config
-    ---@field styles? table<string, snacks.win.Config>
-    ---@field image? snacks.image.Config|{}?
     opts = {
-      -- your configuration comes here
-      -- or leave it empty to use the default settings
-      -- refer to the configuration section below
+      animate = { enabled = false },
       bigfile = {
         enabled = true,
         size = 1024 * 1024 * 10, -- 10MB
       },
-      dashboard = { enabled = true },
+      dashboard = {
+        enabled = true,
+        width = 85,
+        preset = {
+          keys = {
+            { icon = ' ', key = 'f', desc = 'Find File', action = ":lua Snacks.dashboard.pick('files')" },
+            { icon = ' ', key = 't', desc = 'Telescope Find Files', action = ':Telescope find_files' },
+            { icon = ' ', key = 'n', desc = 'New File', action = ':ene | startinsert' },
+            { icon = ' ', key = 'g', desc = 'Find Text', action = ":lua Snacks.dashboard.pick('live_grep')" },
+            { icon = ' ', key = 'r', desc = 'Recent Files', action = ":lua Snacks.dashboard.pick('oldfiles')" },
+            { icon = ' ', key = 'c', desc = 'Config', action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})" },
+            { icon = ' ', key = 's', desc = 'Restore Session', action = '<cmd>SessionSearch<CR>' },
+            { icon = '󰒲 ', key = 'L', desc = 'Lazy', action = ':Lazy', enabled = package.loaded.lazy ~= nil },
+            { icon = ' ', key = 'q', desc = 'Quit', action = ':qa' },
+          },
+        },
+
+        sections = {
+          { section = 'header' },
+          { icon = ' ', title = 'Keymaps', section = 'keys', indent = 2, padding = 1 },
+          { icon = ' ', title = 'Recent Files', section = 'recent_files', indent = 2, padding = 1 },
+          { icon = ' ', title = 'Projects', section = 'projects', indent = 2, padding = 1 },
+          { section = 'startup' },
+        },
+      },
       indent = { enabled = false },
       input = { enabled = true },
       git = { enabled = false },
       image = { enabled = false },
-      quickfile = { enabled = true },
+      -- Might re-enable at some point
+      -- quickfile = { enabled = true },
     },
   },
 }
