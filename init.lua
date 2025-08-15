@@ -172,6 +172,18 @@ vim.keymap.set('n', '<C-up>', '<C-w><C-k>', { desc = 'Move focus to the upper wi
 vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
 vim.keymap.set('n', '<PageDown>', '<C-d>', { desc = 'Scroll down half a page' })
 
+-- Swap * and # (Thats the moving to next occurance of the word)
+vim.keymap.set('n', '*', '#', { desc = 'search backward for the identifier under the cursor', noremap = true })
+vim.keymap.set('n', '#', '*', { desc = 'search forward for the identifier under the cursor', noremap = true })
+vim.keymap.set('n', 'g*', 'g#', { desc = 'search backward for the identifier under the cursor', noremap = true })
+vim.keymap.set('n', 'g#', 'g*', { desc = 'search forward for the identifier under the cursor', noremap = true })
+
+-- Insert current date and time in format yyyy-mm-dd HH:MM
+vim.keymap.set('n', '<leader>id', function()
+  local date = tostring(os.date '%Y-%m-%d %H:%M') -- get current date and time
+  vim.api.nvim_put({ date }, 'c', true, true) -- put it below the current line
+end, { desc = '[I]nsert current [d]ate and time' })
+
 -- [[ Basic Autocommands ]]
 -- See :help lua-guide-autocommands for details on autocommand usage.
 
