@@ -23,6 +23,10 @@ return {
           interval = 1000,
           enabled = true,
         },
+        -- "ascii"   is the graph the git CLI generates
+        -- "unicode" is the graph like https://github.com/rbong/vim-flog
+        -- "kitty"   is the graph like https://github.com/isakbm/gitgraph.nvim - use https://github.com/rbong/flog-symbols if you don't use Kitty
+        graph_style = 'unicode',
         -- Change the default way of opening neogit
         kind = 'split_below',
         -- Show message with spinning animation when a git command is running.
@@ -39,6 +43,9 @@ return {
         -- telescope_sorter = function()
         --   return require('telescope').extensions.fzf.native_fzf_sorter()
         -- end,
+        -- Neogit refreshes its internal state after specific events, which can be expensive depending on the repository size.
+        -- Disabling `auto_refresh` will make it so you have to manually refresh the status after you open it.
+        auto_refresh = true,
       }
     end,
     keys = {
