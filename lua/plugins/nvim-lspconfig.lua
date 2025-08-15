@@ -222,13 +222,18 @@ return {
 
       pyright = {
         settings = {
+          pyright = {
+            disableOrganizeImports = true, -- Using Ruff
+          },
           python = {
             analysis = {
+              ignore = { '*' }, -- Using Ruff
               diagnosticMode = 'workspace',
             },
           },
         },
       },
+      ruff = {},
     }
 
     -- Ensure the servers and tools above are installed
@@ -248,6 +253,11 @@ return {
     require('mason-lspconfig').setup {
       ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
       automatic_installation = true,
+      automatic_enable = {
+        exclude = {
+          'ruff', -- Don't use Ruff
+        },
+      },
       handlers = {
         function(server_name)
           local server = servers[server_name] or {}
