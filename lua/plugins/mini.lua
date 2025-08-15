@@ -128,6 +128,16 @@ return { -- Collection of various small independent plugins/modules
       silent = false,
     }
 
+    -- Setup autopairs
+    -- Works for ( [ { < " '
+    require('mini.pairs').setup {
+
+      mappings = {
+        ['<'] = { action = 'open', pair = '<>', neigh_pattern = '[^\\].' },
+        ['>'] = { action = 'close', pair = '<>', neigh_pattern = '[^\\].' },
+      },
+    }
+
     -- Simple and easy statusline.
     --  You could remove this setup call if you don't like it,
     --  and try some other statusline plugin

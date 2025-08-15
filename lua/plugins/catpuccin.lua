@@ -27,5 +27,8 @@ return {
     }
     -- ColorScheme
     vim.cmd.colorscheme 'catppuccin'
+
+    -- Type Hints
+    vim.api.nvim_set_hl(0, 'RenderMarkdownCode', { bg = 'NONE' })
   end,
 }
