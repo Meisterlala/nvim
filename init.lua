@@ -166,6 +166,13 @@ vim.keymap.set('n', '<C-up>', '<C-w><C-k>', { desc = 'Move focus to the upper wi
 vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
 vim.keymap.set('n', '<PageDown>', '<C-d>', { desc = 'Scroll down half a page' })
 
+-- Keymap to open a terminal
+local success, my_terminal = pcall(require, 'terminal')
+if success then
+  -- Set keybinding only if module is successfully loaded
+  vim.keymap.set('n', '<leader>T', my_terminal.toggle_terminal, { desc = 'Open a [T]erminal', silent = true })
+end
+
 -- [[ Basic Autocommands ]]
 -- See :help lua-guide-autocommands for details on autocommand usage.
 
