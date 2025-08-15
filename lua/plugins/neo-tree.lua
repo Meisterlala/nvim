@@ -17,12 +17,19 @@ return {
   ---@module "neo-tree"
   ---@type neotree.Config?
   opts = {
+    close_if_last_window = false, -- Close Neo-tree if it is the last window left in the tab
     filesystem = {
-      hijack_netrw_behavior = 'disabled',
+      hijack_netrw_behavior = 'open_default',
+      use_libuv_file_watcher = true, -- Use filesystem watcht to look for changes
       window = {
         mappings = {
           ['ß'] = 'close_window',
         },
+      },
+    },
+    default_component_configs = {
+      file_size = {
+        required_width = 50, -- Minimum width for the file size column
       },
     },
   },
