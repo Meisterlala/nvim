@@ -30,7 +30,12 @@ return {
     },
     window = {
       mappings = {
-        ['<space>'] = 'none', -- Disable open with space, because its the leader
+        ['<space>'] = {
+          'none', -- Disable open with space, because its the leader
+          config = {
+            nowait = true,
+          },
+        },
         ['<tab>'] = 'toggle_node',
       },
     },
