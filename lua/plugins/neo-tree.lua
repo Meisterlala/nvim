@@ -19,7 +19,8 @@ return {
   opts = {
     close_if_last_window = true, -- Close Neo-tree if it is the last window left in the tab
     filesystem = {
-      hijack_netrw_behavior = 'open_default',
+      -- hijack_netrw_behavior = 'open_default',
+      hijack_netrw_behavior = 'disabled',
       use_libuv_file_watcher = true, -- Use filesystem watcht to look for changes
       window = {
         mappings = {
