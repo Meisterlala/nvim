@@ -36,8 +36,9 @@ return {
     {
       'rcarriga/nvim-notify',
       opts = {
-        fps = 60,
-        timeout = 8000,
+        fps = 1,
+        timeout = 5000,
+        stages = 'static',
       },
       keys = {
         {
