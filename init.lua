@@ -132,6 +132,12 @@ vim.opt.laststatus = 3 -- Statusline confit
 --  vim.opt.clipboard = 'unnamedplus'     -- Uncomment to use the system clipboard
 --end)
 
+-- Disable basic providers
+vim.g.loaded_node_provider = 0
+vim.g.loaded_perl_provider = 0
+vim.g.loaded_python3_provider = 0
+vim.g.loaded_ruby_provider = 0
+
 -- [[ Basic Keymaps ]]
 -- See :help vim.keymap.set
 
@@ -165,13 +171,6 @@ vim.keymap.set('n', '<C-up>', '<C-w><C-k>', { desc = 'Move focus to the upper wi
 -- Keybind for scrolling up or down with page-up and page-down
 vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
 vim.keymap.set('n', '<PageDown>', '<C-d>', { desc = 'Scroll down half a page' })
-
--- Keymap to open a terminal
-local success, my_terminal = pcall(require, 'terminal')
-if success then
-  -- Set keybinding only if module is successfully loaded
-  vim.keymap.set('n', '<leader>T', my_terminal.toggle_terminal, { desc = 'Open a [T]erminal', silent = true })
-end
 
 -- [[ Basic Autocommands ]]
 -- See :help lua-guide-autocommands for details on autocommand usage.

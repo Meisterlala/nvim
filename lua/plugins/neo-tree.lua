@@ -29,7 +29,7 @@ return {
     },
     window = {
       mappings = {
-        ['<space>'] = nil,
+        ['<space>'] = 'none', -- Disable open with space, because its the leader
         ['<tab>'] = 'toggle_node',
       },
     },
