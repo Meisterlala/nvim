@@ -7,6 +7,13 @@ return {
     config = function()
       local ng = require 'ng'
 
+      -- Should not be needed, but it doenst work without it
+      vim.filetype.add {
+        pattern = {
+          ['.*%.component%.html'] = 'htmlangular', -- Sets the filetype to `htmlangular` if it matches the pattern
+        },
+      }
+
       -- Ensure Treesitter is configured to include Angular
       local ok, ts_config = pcall(require, 'nvim-treesitter.configs')
       if ok then
@@ -39,5 +46,6 @@ return {
       { '<leader>dt', desc = 'Angular [T]emplate' },
       { '<leader>dT', desc = 'Angular [T]ype Check Block' },
     },
+    ft = { 'typescript', 'html', 'htmlangular' },
   },
 }

@@ -18,6 +18,7 @@ return {
   ---@type neotree.Config?
   opts = {
     close_if_last_window = true, -- Close Neo-tree if it is the last window left in the tab
+    enable_git_status = false, -- Disable git status in the file tree
     filesystem = {
       -- hijack_netrw_behavior = 'open_default',
       hijack_netrw_behavior = 'disabled',
