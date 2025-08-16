@@ -11,7 +11,7 @@ return {
   opts = {
     root_dir = vim.fn.expand '~/.vim/auto-session',
     suppressed_dirs = { '~/', '~/Downloads', '/' },
-    close_filetypes_on_save = { 'checkhealth' }, -- Buffers with matching filetypes will be closed before saving
+    close_filetypes_on_save = { 'checkhealth', 'neo-tree' }, -- Buffers with matching filetypes will be closed before saving
     bypass_save_filetypes = { 'snacks_dashboard' },
     session_lens = {
       mappings = {
