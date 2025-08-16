@@ -21,8 +21,10 @@ return {
       },
       routes = {
         {
+          -- Hide "-- INSERT --" notifications when changing mode
           view = 'notify',
           filter = { event = 'msg_showmode' },
+          opts = { skip = true },
         },
       },
     }
