@@ -86,7 +86,7 @@ vim.opt.showmatch = true -- Highlight matching brackets
 vim.opt.matchtime = 2 -- How long to show matching bracket
 vim.opt.cmdheight = 1 -- Command line height
 vim.opt.completeopt = 'menuone,noinsert,noselect' -- Completion options
-vim.opt.showmode = false -- Don't show mode in command line
+vim.opt.showmode = true -- Don't show mode in command line
 vim.opt.pumheight = 10 -- Popup menu height
 vim.opt.pumblend = 10 -- Popup menu transparency
 vim.opt.winblend = 0 -- Floating window transparency
@@ -125,7 +125,7 @@ vim.opt.encoding = 'UTF-8' -- Set encoding
 vim.opt.splitright = true -- Vertical splits open to the right
 vim.opt.splitbelow = true -- Horizontal splits open below
 
-vim.opt.laststatus = 3 -- Statusline confit
+vim.opt.laststatus = 3
 
 -- [[ Clipboard Integration (optional) ]]
 --vim.schedule(function()

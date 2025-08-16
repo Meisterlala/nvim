@@ -164,13 +164,13 @@ return { -- Collection of various small independent plugins/modules
             '%<', -- Mark general truncate point
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
-            { hl = 'gitstatus', strings = { chezmoi_status, git_status } },
+            { hl = 'MiniStatuslineInactive', strings = { chezmoi_status, git_status } },
             { hl = 'MiniStatuslineFileinfo', strings = { lazy_updates_status(), fileinfo } },
             { hl = mode_hl, strings = { search, location } },
           }
         end,
       },
-      use_icons = vim.g.have_nerd_font,
+      use_icons = true,
     }
 
     -- You can configure sections in the statusline by overriding their
