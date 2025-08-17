@@ -158,6 +158,19 @@ return { -- Collection of various small independent plugins/modules
           local git_status = sync_git_status()
           local chezmoi_status = chezmoi_file()
 
+          local ok, noice = pcall(require, 'noice')
+          ---@diagnostic disable-next-line: undefined-field, deprecated
+          if ok and noice.api.statusline.mode.has() then
+            ---@diagnostic disable-next-line: deprecated, undefined-field
+            local cmd = noice.api.statusline.mode.get()
+            -- Remove messages like "-- INSERT --", "-- VISUAL --", etc.
+            cmd = cmd:gsub('%s*%-%- .* %-%-', ''):gsub('^%s+', ''):gsub('%s+$', '')
+            -- Only append if it's non-empty (so @recording etc. shows up)
+            if cmd ~= '' then
+              mode = mode .. ' ' .. cmd
+            end
+          end
+
           return MiniStatusline.combine_groups {
             { hl = mode_hl, strings = { mode } },
             { hl = 'MiniStatuslineDevinfo', strings = { git, diff, diagnostics, lsp } },
