@@ -21,9 +21,20 @@ return {
       },
       routes = {
         {
-          -- Hide "-- INSERT --" notifications when changing mode
-          view = 'notify',
+          filter = { event = 'msg_show', kind = 'search_count' },
+          opts = { skip = true },
+        },
+        {
+          -- Hide "-- INSERT --", "-- VISUAL --", etc.
           filter = { event = 'msg_showmode' },
+          opts = { skip = true },
+        },
+        {
+          filter = {
+            event = 'msg_show',
+            kind = '',
+            find = 'written',
+          },
           opts = { skip = true },
         },
       },
@@ -39,7 +50,7 @@ return {
       'rcarriga/nvim-notify',
       opts = {
         fps = 1,
-        timeout = 5000,
+        timeout = 3000,
         stages = 'static',
       },
       keys = {
