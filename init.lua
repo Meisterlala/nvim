@@ -158,7 +158,7 @@ vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' }
 
 -- Close and Save with leader
 vim.keymap.set('n', '<leader>m', '<cmd>update<CR>', { desc = 'Write File', silent = true })
-vim.keymap.set('n', '<leader>M', '<cmd>w !sudo tee %:p:S >/dev/null | setlocal nomodified<CR>>', { desc = 'Write File with sudo', silent = true })
+vim.keymap.set('n', '<leader>M', '<cmd>w !sudo tee %:p:S >/dev/null | setlocal nomodified<CR>', { desc = 'Write File with sudo', silent = true })
 vim.keymap.set('n', '<leader>n', '<cmd>quit<CR>', { desc = 'Quit File', silent = true })
 vim.keymap.set('n', '<leader>N', '<cmd>quitall<CR>', { desc = 'Quit Neovim', silent = true })
 

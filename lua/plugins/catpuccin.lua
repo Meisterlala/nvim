@@ -1,6 +1,6 @@
 return {
   'catppuccin/nvim',
-  priority = 1000, -- Make sure to load this before all the other start plugins.
+  priority = 2000, -- Make sure to load this before all the other start plugins.
   name = 'catppuccin',
   config = function()
     ---@diagnostic disable-next-line: missing-fields
@@ -12,30 +12,60 @@ return {
         transparent = true,
         solid = false,
       },
+      -- Set Custom Highlights
+      custom_highlights = function(colors)
+        return {
+          RenderMarkdownCode = { bg = colors.none },
+          NeoTreeNormal = { bg = colors.none },
+        }
+      end,
+
+      -- Enalble integrations (they are on by default anyway)
       integrations = {
-        cmp = true,
-        gitsigns = true,
         nvimtree = true,
-        treesitter = true,
-        notify = true,
+        diffview = true,
+        gitsigns = true,
+        markdown = true,
         mini = {
           enabled = true,
           indentscope_color = '',
         },
+        neotree = true,
+        neogit = true,
+        noice = true,
+        cmp = true,
+        copilot_vim = true,
+        native_lsp = {
+          enabled = true,
+          virtual_text = {
+            errors = { 'italic' },
+            hints = { 'italic' },
+            warnings = { 'italic' },
+            information = { 'italic' },
+            ok = { 'italic' },
+          },
+          underlines = {
+            errors = { 'underline' },
+            hints = { 'underline' },
+            warnings = { 'underline' },
+            information = { 'underline' },
+            ok = { 'underline' },
+          },
+          inlay_hints = {
+            background = true,
+          },
+        },
+        notify = true,
+        nvim_surround = true,
+        treesitter = true,
+        telescope = {
+          enabled = true,
+        },
+        which_key = true,
       },
     }
 
-    -- Overwrite some highlights
-    vim.api.nvim_create_autocmd('ColorScheme', {
-      pattern = 'catppuccin',
-      callback = function()
-        -- vim.api.nvim_set_hl(0, 'Normal', { bg = 'NONE' })
-        -- vim.api.nvim_set_hl(0, 'NonText', { bg = 'NONE' })
-        vim.api.nvim_set_hl(0, 'RenderMarkdownCode', { bg = 'NONE' })
-      end,
-    })
-
-    -- ColorScheme
+    -- Load the ColorScheme
     vim.cmd.colorscheme 'catppuccin'
   end,
 }
