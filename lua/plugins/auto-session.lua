@@ -12,7 +12,7 @@ return {
     root_dir = vim.fn.expand '~/.vim/auto-session',
     suppressed_dirs = { '~/', '~/Downloads', '/' },
     close_filetypes_on_save = { 'checkhealth', 'neo-tree' }, -- Buffers with matching filetypes will be closed before saving
-    bypass_save_filetypes = { 'snacks_dashboard', 'Avante', 'AvanteInput' },
+    bypass_save_filetypes = { 'snacks_dashboard', 'Avante', 'AvanteInput', 'netrw' },
     session_lens = {
       mappings = {
         -- Mode can be a string or a table, e.g. {"i", "n"} for both insert and normal mode

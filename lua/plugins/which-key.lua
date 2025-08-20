@@ -1,6 +1,6 @@
 return { -- Useful plugin to show you pending keybinds.
   'folke/which-key.nvim',
-  event = 'VimEnter', -- Sets the loading event to 'VimEnter'
+  event = 'VeryLazy', -- Sets the loading event to 'VimEnter'
   opts = {
     -- delay between pressing a key and opening which-key (milliseconds)
     -- this setting is independent of vim.opt.timeoutlen
@@ -10,6 +10,16 @@ return { -- Useful plugin to show you pending keybinds.
     expand = function(node)
       return not node.desc -- expand all nodes without a description
     end,
+
+    -- Which-key automatically sets up triggers for your mappings.
+    -- But you can disable this and setup the triggers manually.
+    -- Check the docs for more info.
+    ---@type wk.Spec
+    triggers = {
+      { '<auto>', mode = 'nixsotc' },
+      { 'a', mode = { 'n', 'v' } },
+      { 'i', mode = { 'n', 'v' } },
+    },
 
     -- Document existing key chains
     spec = {
@@ -22,6 +32,15 @@ return { -- Useful plugin to show you pending keybinds.
       { '<leader>i', group = '[I]nsert' },
       { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       { '<leader>S', group = '[S]ession' },
+    },
+  },
+  keys = {
+    {
+      '<leader>?',
+      function()
+        require('which-key').show { global = false }
+      end,
+      desc = 'Buffer Local Keymaps (which-key)',
     },
   },
 }
