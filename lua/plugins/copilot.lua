@@ -46,6 +46,16 @@ return {
           -- vim.b.copilot_suggestion_hidden = false
         end)
       end
+
+      -- Rebind <M-y> to <C-y>, if there are no suggestions
+      local copilot_suggestion = require 'copilot.suggestion'
+      vim.keymap.set('i', '<M-y>', function()
+        if copilot_suggestion.is_visible() then
+          copilot_suggestion.accept()
+        else
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-y>', true, false, true), 'n', true)
+        end
+      end, { desc = 'Accept Copilot suggestion' })
     end,
     keys = {
       {
