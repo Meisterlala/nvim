@@ -37,6 +37,7 @@ return { -- Autocompletion
   config = function()
     -- See `:help cmp`
     local cmp = require 'cmp'
+    -- Load LuaSnip
     local luasnip = require 'luasnip'
     luasnip.config.setup {}
     cmp.setup {
