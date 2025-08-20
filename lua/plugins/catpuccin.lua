@@ -9,7 +9,7 @@ return {
       transparent_background = false,
       auto_integrations = true,
       float = {
-        transparent = true,
+        transparent = false,
         solid = false,
       },
       integrations = {
@@ -22,13 +22,20 @@ return {
           enabled = true,
           indentscope_color = '',
         },
-        -- For more plugins integrations please scroll down (https://github.com/catppuccin/nvim#integrations)
       },
     }
+
+    -- Overwrite some highlights
+    vim.api.nvim_create_autocmd('ColorScheme', {
+      pattern = 'catppuccin',
+      callback = function()
+        -- vim.api.nvim_set_hl(0, 'Normal', { bg = 'NONE' })
+        -- vim.api.nvim_set_hl(0, 'NonText', { bg = 'NONE' })
+        vim.api.nvim_set_hl(0, 'RenderMarkdownCode', { bg = 'NONE' })
+      end,
+    })
+
     -- ColorScheme
     vim.cmd.colorscheme 'catppuccin'
-
-    -- Type Hints
-    vim.api.nvim_set_hl(0, 'RenderMarkdownCode', { bg = 'NONE' })
   end,
 }
