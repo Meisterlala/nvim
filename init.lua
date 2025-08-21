@@ -237,9 +237,7 @@ require('lazy').setup({
     notify = false, -- Don't show notification when plugin settings change
   },
   ui = {
-    -- If you are using a Nerd Font: set icons to an empty table which will use the
-    -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table
-    icons = vim.g.have_nerd_font and {} or {
+    icons = {
       cmd = '⌘',
       config = '🛠',
       event = '📅',
@@ -258,7 +256,4 @@ require('lazy').setup({
   rocks = { enabled = false, hererocks = false },
 })
 
--- The line beneath this is called `modeline`.
--- It helps some editors detect and respect this file's indentation settings.
--- See :help modeline
 -- vim: ts=2 sts=2 sw=2 et
