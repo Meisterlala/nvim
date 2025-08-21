@@ -53,6 +53,10 @@ return {
 
         sections = {
           { section = 'header' },
+          {
+            -- custom header showing NVIM version
+            text = { { string.format('v%d.%d.%d', vim.version().major, vim.version().minor, vim.version().patch), align = 'center' } },
+          },
           { icon = ' ', title = 'Keymaps', section = 'keys', indent = 2, padding = 1 },
           { icon = ' ', title = 'Recent Files', section = 'recent_files', indent = 2, padding = 1 },
           { icon = ' ', title = 'Projects', section = 'projects', indent = 2, padding = 1 },
