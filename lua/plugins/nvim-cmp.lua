@@ -47,6 +47,12 @@ return { -- Autocompletion
         end,
       },
 
+      -- Show the text that will be inserted
+      -- TODO: Make this work with Copilot auto-suggestions
+      experimental = {
+        ghost_text = false,
+      },
+
       completion = {
         keyword_length = 1,
         completeopt = 'menu,menuone,noinsert',
@@ -91,15 +97,7 @@ return { -- Autocompletion
 
         -- If you prefer more traditional completion keymaps,
         -- you can uncomment the following lines
-        ['<CR>'] = cmp.mapping(function(fallback)
-          if cmp.visible() and cmp.get_selected_entry() then
-            -- Confirm only if something is explicitly selected
-            cmp.confirm { select = false }
-          else
-            -- Otherwise, just do normal <CR>
-            fallback()
-          end
-        end, { 'i', 'c' }),
+        ['<CR>'] = cmp.mapping.confirm { select = false },
         --['<Tab>'] = cmp.mapping.select_next_item(),
         --['<S-Tab>'] = cmp.mapping.select_prev_item(),
 
@@ -167,6 +165,7 @@ return { -- Autocompletion
       sources = {
         { name = 'buffer' },
       },
+      preselect = cmp.PreselectMode.None,
     })
 
     -- `:` cmdline setup.
@@ -183,6 +182,7 @@ return { -- Autocompletion
         },
         matching = { disallow_symbol_nonprefix_matching = false },
       }),
+      preselect = cmp.PreselectMode.None,
     })
   end,
 }
