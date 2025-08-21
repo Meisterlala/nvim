@@ -91,7 +91,15 @@ return { -- Autocompletion
 
         -- If you prefer more traditional completion keymaps,
         -- you can uncomment the following lines
-        ['<CR>'] = cmp.mapping.confirm { select = true },
+        ['<CR>'] = cmp.mapping(function(fallback)
+          if cmp.visible() and cmp.get_selected_entry() then
+            -- Confirm only if something is explicitly selected
+            cmp.confirm { select = false }
+          else
+            -- Otherwise, just do normal <CR>
+            fallback()
+          end
+        end, { 'i', 'c' }),
         --['<Tab>'] = cmp.mapping.select_next_item(),
         --['<S-Tab>'] = cmp.mapping.select_prev_item(),
 
@@ -100,6 +108,23 @@ return { -- Autocompletion
         --  completions whenever it has completion options available.
         ['<C-Space>'] = cmp.mapping.complete {},
         ['<C-x>'] = cmp.mapping.complete {},
+
+        -- Up/Down arrows navigate the menu if it's visible
+        ['<Down>'] = cmp.mapping(function(fallback)
+          if cmp.visible() then
+            cmp.select_next_item()
+          else
+            fallback() -- let Down act normally if menu not open
+          end
+        end, { 'i', 'c' }),
+
+        ['<Up>'] = cmp.mapping(function(fallback)
+          if cmp.visible() then
+            cmp.select_prev_item()
+          else
+            fallback() -- normal Up otherwise
+          end
+        end, { 'i', 'c' }),
 
         -- Think of <c-l> as moving to the right of your snippet expansion.
         --  So if you have a snippet that's like:
