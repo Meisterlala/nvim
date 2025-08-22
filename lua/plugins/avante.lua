@@ -11,105 +11,108 @@ return {
   end,
   event = 'VeryLazy',
   version = false, -- Never set this value to "*"! Never!
-  ---@module 'avante'
-  ---@type avante.Config
-  opts = {
-    provider = 'openrouter',
-    auto_suggestions_provider = 'copilot',
-    providers = {
-      copilot = {
-        model = 'gpt-4.1',
+  opts = function()
+    ---@module 'avante'
+    ---@type avante.Config
+    return {
+      provider = 'openai',
+      auto_suggestions_provider = 'copilot',
+
+      providers = {
+        copilot = {
+          model = 'gpt-5-mini',
+        },
+        openrouter = {
+          __inherited_from = 'openai',
+          endpoint = 'https://openrouter.ai/api/v1',
+          model = 'qwen/qwen3-coder',
+          api_key_name = 'AVANTE_OPENROUTER',
+        },
       },
-      openrouter = {
-        __inherited_from = 'openai',
-        endpoint = 'https://openrouter.ai/api/v1',
-        model = 'qwen/qwen3-coder',
-        api_key_name = 'AVANTE_OPENROUTER',
+      behaviour = {
+        auto_set_keymaps = true,
+        auto_apply_diff_after_generation = false,
+        support_paste_from_clipboard = false,
       },
-    },
-    behaviour = {
-      auto_set_keymaps = true,
-      auto_apply_diff_after_generation = false,
-      support_paste_from_clipboard = false,
-    },
-    prompt_logger = { -- logs prompts to disk (timestamped, for replay/debugging)
-      enabled = true, -- toggle logging entirely
-      log_dir = vim.fn.stdpath 'cache' .. '/avante_prompts', -- directory where logs are saved
-      next_prompt = {
-        normal = '<C-n>', -- load the next (newer) prompt log in normal mode
-        insert = '<C-n>',
+      prompt_logger = { -- logs prompts to disk (timestamped, for replay/debugging)
+        enabled = true, -- toggle logging entirely
+        log_dir = vim.fn.stdpath 'cache' .. '/avante_prompts', -- directory where logs are saved
+        next_prompt = {
+          normal = '<C-n>', -- load the next (newer) prompt log in normal mode
+          insert = '<C-n>',
+        },
+        prev_prompt = {
+          normal = '<C-p>', -- load the previous (older) prompt log in normal mode
+          insert = '<C-p>',
+        },
       },
-      prev_prompt = {
-        normal = '<C-p>', -- load the previous (older) prompt log in normal mode
-        insert = '<C-p>',
+      history = {
+        max_tokens = 32768,
       },
-    },
-    history = {
-      max_tokens = 32768,
-    },
-    mappings = {
-      --- @class AvanteConflictMappings
-      diff = {
-        ours = 'co',
-        theirs = 'ct',
-        all_theirs = 'ca',
-        both = 'cb',
-        cursor = 'cc',
-        next = ']x',
-        prev = '[x',
+      mappings = {
+        --- @class AvanteConflictMappings
+        diff = {
+          ours = 'co',
+          theirs = 'ct',
+          all_theirs = 'ca',
+          both = 'cb',
+          cursor = 'cc',
+          next = ']x',
+          prev = '[x',
+        },
+        suggestion = {
+          accept = '<M-l>',
+          next = '<M-]>',
+          prev = '<M-[>',
+          dismiss = '<C-]>',
+        },
+        jump = {
+          next = ']]',
+          prev = '[[',
+        },
+        submit = {
+          normal = '<CR>',
+          insert = '<C-s>',
+        },
+        cancel = {
+          normal = { '<C-c>', '<Esc>', 'q' },
+          insert = { '<C-c>' },
+        },
+        sidebar = {
+          apply_all = 'A',
+          apply_cursor = 'a',
+          retry_user_request = 'r',
+          edit_user_request = 'e',
+          switch_windows = '<Tab>',
+          reverse_switch_windows = '<S-Tab>',
+          remove_file = 'd',
+          add_file = '@',
+          close = { '<Esc>', 'q' },
+          close_from_input = { '<Esc>' }, -- e.g., { normal = "<Esc>", insert = "<C-d>" }
+        },
+      },
+      --- @class AvanteHintsConfig
+      hints = { enabled = false },
+      windows = {
+        ---@type "right" | "left" | "top" | "bottom"
+        position = 'right', -- the position of the sidebar
+        wrap = true, -- similar to vim.o.wrap
+        width = 35, -- default % based on available width
+        sidebar_header = {
+          enabled = true, -- true, false to enable/disable the header
+          align = 'center', -- left, center, right for title
+          rounded = true,
+        },
       },
       suggestion = {
-        accept = '<M-l>',
-        next = '<M-]>',
-        prev = '<M-[>',
-        dismiss = '<C-]>',
+        debounce = 600,
+        throttle = 600,
       },
-      jump = {
-        next = ']]',
-        prev = '[[',
+      web_search_engine = {
+        provider = 'tavily',
       },
-      submit = {
-        normal = '<CR>',
-        insert = '<C-s>',
-      },
-      cancel = {
-        normal = { '<C-c>', '<Esc>', 'q' },
-        insert = { '<C-c>' },
-      },
-      sidebar = {
-        apply_all = 'A',
-        apply_cursor = 'a',
-        retry_user_request = 'r',
-        edit_user_request = 'e',
-        switch_windows = '<Tab>',
-        reverse_switch_windows = '<S-Tab>',
-        remove_file = 'd',
-        add_file = '@',
-        close = { '<Esc>', 'q' },
-        close_from_input = { '<Esc>' }, -- e.g., { normal = "<Esc>", insert = "<C-d>" }
-      },
-    },
-    --- @class AvanteHintsConfig
-    hints = { enabled = false },
-    windows = {
-      ---@type "right" | "left" | "top" | "bottom"
-      position = 'right', -- the position of the sidebar
-      wrap = true, -- similar to vim.o.wrap
-      width = 35, -- default % based on available width
-      sidebar_header = {
-        enabled = true, -- true, false to enable/disable the header
-        align = 'center', -- left, center, right for title
-        rounded = true,
-      },
-    },
-    suggestion = {
-      debounce = 600,
-      throttle = 600,
-    },
-    web_search_engine = {
-      provider = 'tavily',
-    },
-  },
+    }
+  end,
   dependencies = {
     'nvim-lua/plenary.nvim',
     'MunifTanjim/nui.nvim',
