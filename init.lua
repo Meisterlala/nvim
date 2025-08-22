@@ -185,6 +185,34 @@ vim.keymap.set('n', '<leader>id', function()
   vim.api.nvim_put({ date }, 'c', true, true) -- put it below the current line
 end, { desc = '[I]nsert current [d]ate and time' })
 
+-- [[ Custom Tabline ]]
+-- Custom tab names
+vim.o.tabline = '%!v:lua.MyTabline()'
+
+function _G.MyTabline()
+  local s = ''
+  for i = 1, vim.fn.tabpagenr '$' do
+    local winnr = vim.fn.tabpagewinnr(i)
+    local buflist = vim.fn.tabpagebuflist(i)
+    local bufnr = buflist[winnr]
+    local bufname = vim.fn.fnamemodify(vim.fn.bufname(bufnr), ':t')
+
+    -- Here you decide how the tab should be named
+    if bufname == '' then
+      bufname = '[No Name]'
+    end
+
+    s = s .. '%' .. i .. 'T' .. ' ' .. bufname .. ' '
+  end
+  return s
+end
+-- Keybinds for switching tabs with Ctrl+1-9
+for i = 1, 9 do
+  vim.keymap.set('n', '<C-' .. i .. '>', function()
+    vim.cmd('tabn ' .. i) -- go to tab i
+  end, { noremap = true, silent = true })
+end
+
 -- [[ Basic Autocommands ]]
 -- See :help lua-guide-autocommands for details on autocommand usage.
 

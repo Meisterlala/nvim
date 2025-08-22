@@ -1,3 +1,47 @@
+local function code_files_picker(opts)
+  opts = opts or {}
+
+  local exts = {
+    'cpp',
+    'c',
+    'h',
+    'hpp',
+    'rs',
+    'java',
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'html',
+    'css',
+    'scss',
+    'py',
+    'go',
+    'lua',
+  }
+
+  local brace_pattern = '*.{' .. table.concat(exts, ',') .. '}'
+  local find_cmd = {
+    'fd',
+    '--type',
+    'f',
+    '--follow',
+    '--exclude',
+    '.git',
+    '--max-results',
+    '10000',
+    '--strip-cwd-prefix',
+    '-g',
+    brace_pattern,
+  }
+
+  require('telescope.builtin').find_files(vim.tbl_extend('force', {
+    find_command = find_cmd,
+    prompt_title = 'Code files',
+    hidden = true,
+  }, opts))
+end
+
 return { -- Fuzzy Finder (files, lsp, etc)
   'nvim-telescope/telescope.nvim',
   event = 'VimEnter',
@@ -67,7 +111,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
     vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
     vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
     vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
-    vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
+    vim.keymap.set('n', '<leader><leader>', code_files_picker, { desc = '[ ] Find code' })
 
     -- Slightly advanced example of overriding default behavior and theme
     vim.keymap.set('n', '<leader>/', function()
