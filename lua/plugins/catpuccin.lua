@@ -17,6 +17,10 @@ return {
         return {
           RenderMarkdownCode = { bg = colors.none },
           NeoTreeNormal = { bg = colors.none },
+
+          AvanteTitle = { fg = colors.base, bg = colors.lavender },
+          AvanteSubtitle = { fg = colors.base, bg = colors.peach },
+          AvanteThirdtitle = { fg = colors.base, bg = colors.blue },
         }
       end,
 
