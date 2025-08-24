@@ -63,6 +63,48 @@ local function chezmoi_file()
   return ''
 end
 
+--- Returns filetype icon, name and size
+local function my_fileinfo()
+  local filetype = vim.bo.filetype
+  -- Get filetype icon from nvim-web-devicons
+  local devicons_ok, devicons = pcall(require, 'nvim-web-devicons')
+  local ft_icon = ''
+  if devicons_ok and filetype ~= '' then
+    local icon, _ = devicons.get_icon_by_filetype(filetype, { default = true })
+    if icon then
+      ft_icon = icon .. ' '
+    end
+  end
+
+  -- Get Treesitter language icon (fallback to none if parser missing)
+  if ft_icon == '' then
+    local ts_ok, parsers = pcall(require, 'nvim-treesitter.parsers')
+    if ts_ok then
+      local lang = parsers.get_buf_lang(0) or ''
+      if lang ~= '' and devicons_ok then
+        local icon, _ = devicons.get_icon_by_filetype(lang, { default = true })
+        if icon then
+          ft_icon = icon .. ' '
+        end
+      end
+    end
+  end
+
+  local size = vim.fn.getfsize(vim.fn.expand '%')
+  local sizeOut = ''
+  if size < 0 then
+    sizeOut = ''
+  elseif size < 1024 then
+    sizeOut = size .. 'B'
+  elseif size < 1024 * 1024 then
+    sizeOut = string.format('%.1fK', size / 1024)
+  else
+    sizeOut = string.format('%.1fM', size / (1024 * 1024))
+  end
+
+  return string.format('%s%s %s', ft_icon, filetype, sizeOut)
+end
+
 return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
@@ -152,7 +194,7 @@ return { -- Collection of various small independent plugins/modules
           local diagnostics = MiniStatusline.section_diagnostics { trunc_width = 75 }
           local lsp = MiniStatusline.section_lsp { trunc_width = 75 }
           local filename = MiniStatusline.section_filename { trunc_width = 140 }
-          local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
+          -- local fileinfo = MiniStatusline.section_fileinfo { trunc_width = 120 }
           local location = MiniStatusline.section_location { trunc_width = 75 }
           local search = MiniStatusline.section_searchcount { trunc_width = 75 }
           local git_status = sync_git_status()
@@ -178,7 +220,7 @@ return { -- Collection of various small independent plugins/modules
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
             { hl = 'MiniStatuslineInactive', strings = { chezmoi_status, git_status } },
-            { hl = 'MiniStatuslineFileinfo', strings = { lazy_updates_status(), fileinfo } },
+            { hl = 'MiniStatuslineFileinfo', strings = { lazy_updates_status(), my_fileinfo() } },
             { hl = mode_hl, strings = { search, location } },
           }
         end,
