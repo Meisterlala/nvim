@@ -179,6 +179,9 @@ vim.keymap.set('n', '#', '*', { desc = 'search forward for the identifier under 
 vim.keymap.set('n', 'g*', 'g#', { desc = 'search backward for the identifier under the cursor', noremap = true })
 vim.keymap.set('n', 'g#', 'g*', { desc = 'search forward for the identifier under the cursor', noremap = true })
 
+-- Open a new tab with ctl-wt
+vim.keymap.set('n', '<C-w>t', '<cmd>tabnew<CR>', { desc = 'Open new tab' })
+
 -- Insert current date and time in format yyyy-mm-dd HH:MM
 vim.keymap.set('n', '<leader>id', function()
   local date = tostring(os.date '%Y-%m-%d %H:%M') -- get current date and time
@@ -215,6 +218,17 @@ end
 
 -- [[ Basic Autocommands ]]
 -- See :help lua-guide-autocommands for details on autocommand usage.
+
+-- Jump to previous tab when closing a tab
+vim.api.nvim_create_autocmd('TabClosed', {
+  callback = function()
+    -- always move back one tab when a tab closes
+    local prev = vim.fn.tabpagenr() - 1
+    if prev >= 1 then
+      vim.cmd('tabnext ' .. prev)
+    end
+  end,
+})
 
 -- Highlight yanked (copied) text briefly for visual feedback
 -- Try it by selecting text in normal mode and pressing "yap"
