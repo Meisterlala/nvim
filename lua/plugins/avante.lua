@@ -15,7 +15,7 @@ return {
     ---@module 'avante'
     ---@type avante.Config
     return {
-      provider = 'openai',
+      provider = 'copilot',
       auto_suggestions_provider = 'copilot',
 
       providers = {
@@ -27,6 +27,14 @@ return {
           endpoint = 'https://openrouter.ai/api/v1',
           model = 'qwen/qwen3-coder',
           api_key_name = 'AVANTE_OPENROUTER',
+        },
+        openai = {
+          list_models = {
+            { id = 'gpt-5', name = 'gpt-5', display_name = 'GPT-5' },
+            { id = 'gpt-5-mini', name = 'gpt-5-mini', display_name = 'GPT-5 Mini' },
+            { id = 'gpt-4o', name = 'gpt-4o', display_name = 'GPT-4o' },
+            { id = 'gpt-4o-mini', name = 'gpt-4o-mini', display_name = 'GPT-4o Mini' },
+          },
         },
       },
       behaviour = {
