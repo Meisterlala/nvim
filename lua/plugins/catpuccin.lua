@@ -3,10 +3,12 @@ return {
   priority = 2000, -- Make sure to load this before all the other start plugins.
   name = 'catppuccin',
   config = function()
+    local trans = true
+
     ---@diagnostic disable-next-line: missing-fields
     require('catppuccin').setup {
       flavour = 'mocha',
-      transparent_background = false,
+      transparent_background = trans,
       auto_integrations = true,
       float = {
         transparent = true,
@@ -15,8 +17,11 @@ return {
       -- Set Custom Highlights
       custom_highlights = function(colors)
         return {
-          RenderMarkdownCode = { bg = colors.none },
-          NeoTreeNormal = { bg = colors.none },
+          -- RenderMarkdownCode = { bg = colors.none },
+          -- NeoTreeNormal = { bg = colors.none },
+
+          MiniStatuslineFilename = { fg = colors.text, bg = trans and colors.none or colors.mantle },
+          MiniStatuslineInactive = { fg = colors.blue, bg = trans and colors.none or colors.mantle },
 
           AvanteTitle = { fg = colors.base, bg = colors.lavender },
           AvanteSubtitle = { fg = colors.base, bg = colors.peach },
