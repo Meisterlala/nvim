@@ -152,9 +152,8 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 -- <leader>q: Open list of diagnostics in location list (see :help diagnostic)
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 
--- Easier shortcut to exit terminal mode: double ESC (instead of <C-\><C-n>)
--- Helpful for terminal users new to Neovim
-vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
+-- Exit terminal mode with Esc
+vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- Close and Save with leader
 vim.keymap.set('n', '<leader>m', '<cmd>update<CR>', { desc = 'Write File', silent = true })
