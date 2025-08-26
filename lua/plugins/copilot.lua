@@ -8,7 +8,7 @@ local function toggle_copilot()
     require('copilot.command').disable()
 
     -- Rebind <M-y> to <C-y>, so that auto-complete falls back to nvim-cmp
-    vim.api.nvim_set_keymap('i', '<M-y>', '<C-y>', { silent = true })
+    vim.api.nvim_set_keymap('ic', '<M-y>', '<C-y>', { silent = true })
 
     vim.notify('Copilot disabled', vim.log.levels.INFO, { title = 'Copilot' })
   end
@@ -22,10 +22,11 @@ return {
     config = function()
       require('copilot').setup {
         suggestion = {
-          enabled = true,
-          auto_trigger = true,
+          enabled = false,
+          auto_trigger = false,
           keymap = {
             accept = '<M-y>',
+            -- You can add additional keymaps below if needed
             accept_word = false,
             accept_line = false,
             next = '<M-n>',

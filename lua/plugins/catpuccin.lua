@@ -12,12 +12,13 @@ return {
         transparent_background = trans,
         auto_integrations = true,
         float = {
-          transparent = true,
+          transparent = false,
           solid = false,
         },
         -- Set Custom Highlights
         custom_highlights = function(colors)
           return {
+
             RenderMarkdownCode = { bg = colors.mantle },
             -- NeoTreeNormal = { bg = colors.none },
 
@@ -33,12 +34,17 @@ return {
             AvantePromptInput = { fg = colors.text, bg = colors.none },
             AvantePromptInputBorder = { fg = colors.text, bg = colors.none },
             AvanteSidebarNormal = { fg = colors.text, bg = colors.none },
+            AvanteToBeDeleted = { fg = colors.red, bg = colors.none },
+
+            TelescopeNormal = { fg = colors.text, bg = colors.none },
+            TelescopeBorder = { fg = colors.text, bg = colors.none },
+            TelescopeTitle = { fg = colors.text, bg = colors.none },
           }
         end,
 
         -- Enalble integrations (they are on by default anyway)
         integrations = {
-          avante = false,
+          avante = true,
           nvimtree = true,
           diffview = true,
           gitsigns = true,
@@ -110,7 +116,7 @@ return {
   {
     'xiyaowong/transparent.nvim',
     lazy = false,
-    enabled = false,
+    enabled = true,
     priority = 1900,
     config = function()
       require('transparent').setup {
