@@ -108,6 +108,9 @@ function M.commit_and_push_config_changes()
       vim.schedule(function()
         vim.notify('No changes to commit.', vim.log.levels.INFO)
         M.commit_is_running = false
+        if M.refresh_nvim_config_git_status then
+          M.refresh_nvim_config_git_status()
+        end
       end)
       return
     end
@@ -118,6 +121,9 @@ function M.commit_and_push_config_changes()
         vim.schedule(function()
           vim.notify('Failed to add changes:\n' .. add_obj.stderr, vim.log.levels.ERROR)
           M.commit_is_running = false
+          if M.refresh_nvim_config_git_status then
+            M.refresh_nvim_config_git_status()
+          end
         end)
         return
       end
@@ -129,6 +135,9 @@ function M.commit_and_push_config_changes()
           vim.schedule(function()
             vim.notify('Failed to commit:\n' .. commit_obj.stderr, vim.log.levels.ERROR)
             M.commit_is_running = false
+            if M.refresh_nvim_config_git_status then
+              M.refresh_nvim_config_git_status()
+            end
           end)
           return
         end
