@@ -55,7 +55,7 @@ return {
         },
       },
       history = {
-        max_tokens = 32768,
+        max_tokens = 327680,
       },
       mappings = {
         --- @class AvanteConflictMappings
@@ -69,10 +69,10 @@ return {
           prev = '[x',
         },
         suggestion = {
-          accept = '<M-l>',
-          next = '<M-]>',
-          prev = '<M-[>',
-          dismiss = '<C-]>',
+          accept = '<M-y>',
+          next = '<M-n>',
+          prev = '<M-p>',
+          dismiss = '<M-x>',
         },
         jump = {
           next = ']]',
@@ -113,8 +113,8 @@ return {
         },
       },
       suggestion = {
-        debounce = 600,
-        throttle = 600,
+        debounce = 500,
+        throttle = 800,
       },
       web_search_engine = {
         provider = 'tavily',
