@@ -174,7 +174,7 @@ return { -- Autocompletion
           else
             fallback() -- normal Up otherwise
           end
-        end, { 'i', 'c' }),
+        end, { 'i' }),
 
         -- Think of <c-l> as moving to the right of your snippet expansion.
         --  So if you have a snippet that's like:
