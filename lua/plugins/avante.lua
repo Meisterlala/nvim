@@ -86,6 +86,11 @@ local function get_openrouter_models(cb)
   })
 end
 
+function really_cool()
+  -- return 43
+  -- Do something here AI:
+end
+
 return {
   'yetone/avante.nvim',
   -- Build function
@@ -142,6 +147,8 @@ return {
         -- },
       },
       behaviour = {
+        auto_suggestions = true,
+
         auto_set_keymaps = true,
         auto_apply_diff_after_generation = false,
         support_paste_from_clipboard = false,

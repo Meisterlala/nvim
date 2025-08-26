@@ -8,7 +8,7 @@ local function toggle_copilot()
     require('copilot.command').disable()
 
     -- Rebind <M-y> to <C-y>, so that auto-complete falls back to nvim-cmp
-    vim.api.nvim_set_keymap('ic', '<M-y>', '<C-y>', { silent = true })
+    vim.api.nvim_set_keymap('i', '<M-y>', '<C-y>', { silent = true })
 
     vim.notify('Copilot disabled', vim.log.levels.INFO, { title = 'Copilot' })
   end
@@ -18,19 +18,28 @@ return {
   {
     'zbirenbaum/copilot.lua',
     cmd = 'Copilot',
-    event = 'InsertEnter',
+    event = { 'InsertEnter', 'VeryLazy' },
     config = function()
       require('copilot').setup {
         suggestion = {
           enabled = false,
           auto_trigger = false,
+          -- keymap = {
+          --   accept = '<M-y>',
+          --   -- You can add additional keymaps below if needed
+          --   accept_word = false,
+          --   accept_line = false,
+          --   next = '<M-n>',
+          --   prev = '<M-p>',
+          --   dismiss = false,
+          -- },
           keymap = {
-            accept = '<M-y>',
+            accept = false,
             -- You can add additional keymaps below if needed
             accept_word = false,
             accept_line = false,
-            next = '<M-n>',
-            prev = '<M-p>',
+            next = false,
+            prev = false,
             dismiss = false,
           },
         },
