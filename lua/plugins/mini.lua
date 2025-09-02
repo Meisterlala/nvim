@@ -111,6 +111,9 @@ return { -- Collection of various small independent plugins/modules
     -- Initialize and update nvim git status using sync module
     sync.refresh_nvim_config_git_status()
 
+    -- Align stuff
+    require('mini.align').setup()
+
     -- Better Around/Inside textobjects
     --
     -- Examples:
