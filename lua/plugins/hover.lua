@@ -1,10 +1,10 @@
 return {
   'lewis6991/hover.nvim',
   config = function()
-    require('hover').setup {
-      init = function()
-        -- Require providers
-        require 'hover.providers.lsp'
+    require('hover').config {
+      -- Require providers
+      providers = {
+        'hover.providers.lsp',
         -- require('hover.providers.gh')
         -- require('hover.providers.gh_user')
         -- require('hover.providers.jira')
@@ -14,7 +14,7 @@ return {
         -- require('hover.providers.man')
         -- require('hover.providers.dictionary')
         -- require 'hover.providers.highlight'
-      end,
+      },
       preview_opts = {
         border = 'none',
       },
@@ -29,36 +29,36 @@ return {
     }
 
     -- Setup keymaps
-    vim.keymap.set('n', 'K', require('hover').hover, { desc = 'hover.nvim' })
-    vim.keymap.set('n', 'gK', require('hover').hover_select, { desc = 'hover.nvim (select)' })
+    vim.keymap.set('n', 'K', require('hover').open, { desc = 'hover.nvim' })
+    vim.keymap.set('n', 'gK', require('hover').select, { desc = 'hover.nvim (select)' })
     vim.keymap.set('n', '<C-p>', function()
-      ---@diagnostic disable-next-line: missing-parameter
-      require('hover').hover_switch 'previous'
+      require('hover').switch 'previous'
     end, { desc = 'hover.nvim (previous source)' })
     vim.keymap.set('n', '<C-n>', function()
-      ---@diagnostic disable-next-line: missing-parameter
-      require('hover').hover_switch 'next'
+      require('hover').switch 'next'
     end, { desc = 'hover.nvim (next source)' })
 
     -- Mouse support
-    vim.keymap.set('n', '<MouseMove>', require('hover').hover_mouse, { desc = 'hover.nvim (mouse)' })
+    vim.keymap.set('n', '<MouseMove>', require('hover').mouse, { desc = 'hover.nvim (mouse)' })
 
     vim.o.mousemoveevent = true
 
     -- Auto open docs on hover
     vim.o.updatetime = 2000
     -- But only for LSP attached buffers
-    vim.api.nvim_create_autocmd('LspAttach', {
-      callback = function(args)
-        local bufnr = args.buf
-        vim.api.nvim_create_autocmd('CursorHold', {
-          buffer = bufnr,
-          callback = function()
-            ---@diagnostic disable-next-line: missing-parameter
-            require('hover').hover()
-          end,
-        })
-      end,
-    })
+    -- vim.api.nvim_create_autocmd('LspAttach', {
+    --   callback = function(args)
+    --     local bufnr = args.buf
+    --     vim.api.nvim_create_autocmd('CursorHold', {
+    --       buffer = bufnr,
+    --       callback = function()
+    --         -- Check if buffer is valid
+    --         if vim.api.nvim_buf_is_loaded(bufnr) then
+    --           require('hover').open()
+    --         end
+    --       end,
+    --     })
+    --   end,
+    -- })
   end,
 }
