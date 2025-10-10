@@ -119,7 +119,7 @@ return {
           __inherited_from = 'openai',
           endpoint = 'https://openrouter.ai/api/v1',
           api_key_name = 'AVANTE_OPENROUTER',
-          model = 'deepseek/deepseek-chat-v3.1',
+          model = 'x-ai/grok-code-fast-1',
 
           -- list_models = {
           --   { id = 'deepseek/deepseek-chat-v3.1', name = 'deepseek/deepseek-chat-v3' },
@@ -130,6 +130,7 @@ return {
           -- },
           model_names = {
             'deepseek/deepseek-chat-v3.1',
+            'x-ai/grok-code-fast-1',
             'qwen/qwen3-coder',
             'openai/gpt-5',
             'moonshotai/kimi-k2',
