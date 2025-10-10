@@ -22,7 +22,7 @@ return {
     config = function()
       require('copilot').setup {
         suggestion = {
-          enabled = false,
+          enabled = true,
           auto_trigger = false,
           -- keymap = {
           --   accept = '<M-y>',
@@ -50,7 +50,6 @@ return {
       }
 
       -- Hide Copilot suggestions when the completion menu is open
-      --[[
       local cmp_ok, cmp = pcall(require, 'cmp')
       if cmp_ok then
         cmp.event:on('menu_opened', function()
@@ -61,7 +60,6 @@ return {
           vim.b.copilot_suggestion_hidden = false
         end)
       end
-      --]]
     end,
     keys = {
       {
