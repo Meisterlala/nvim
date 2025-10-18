@@ -3,6 +3,7 @@ vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,
 
 return {
   'rmagatti/auto-session',
+  enabled = false,
   lazy = false,
   ---enables autocomplete for opts
   ---@module "auto-session"
