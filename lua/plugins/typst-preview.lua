@@ -7,7 +7,7 @@ return {
     require('typst-preview').setup {
       -- Setting this true will enable logging debug information to
       -- `vim.fn.stdpath 'data' .. '/typst-preview/log.txt'`
-      debug = true,
+      debug = false,
 
       -- Custom format string to open the output link provided with %s
       -- Example: open_cmd = 'firefox %s -P typst-preview --class typst-preview'
