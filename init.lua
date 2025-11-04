@@ -145,6 +145,9 @@ vim.g.loaded_ruby_provider = 0
 local nimv_sync = require 'sync'
 vim.keymap.set('n', '<leader>u', nimv_sync.commit_and_push_config_changes, { desc = '[U]pload the nvim config to GitHub' })
 
+-- Use my own powershell stuff
+require 'pwsh_lsp'
+
 -- Pressing <Esc> in normal mode will clear search highlighting
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 

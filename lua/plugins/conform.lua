@@ -25,11 +25,24 @@ return { -- Autoformat
         return nil
       else
         return {
-          timeout_ms = 500,
+          timeout_ms = 1000,
           lsp_format = 'fallback',
         }
       end
     end,
+    --- @type table<string, conform.FormatterConfig>
+    formatters = {
+      powershell = {
+        command = 'pwsh',
+        args = {
+          '-NoProfile',
+          '-Command',
+          'if (!(Get-Module -ListAvailable -Name PSScriptAnalyzer)) { Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser }; Import-Module PSScriptAnalyzer; $input | Invoke-Formatter',
+        },
+        stdin = true,
+      },
+    },
+
     formatters_by_ft = {
       lua = { 'stylua' },
       -- Conform can also run multiple formatters sequentially
