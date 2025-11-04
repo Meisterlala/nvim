@@ -86,11 +86,6 @@ local function get_openrouter_models(cb)
   })
 end
 
-function really_cool()
-  -- return 43
-  -- Do something here AI:
-end
-
 --- @type LazySpec
 return {
   'yetone/avante.nvim',

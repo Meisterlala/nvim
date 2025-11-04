@@ -88,27 +88,6 @@ return {
           which_key = true,
         },
       }
-
-      --- Function to modify existing highlight groups
-      local function mod_hl(hl_name, opts)
-        local is_ok, hl_def = pcall(vim.api.nvim_get_hl_by_name, hl_name, true)
-        if is_ok then
-          for k, v in pairs(opts) do
-            hl_def[k] = v
-          end
-          vim.api.nvim_set_hl(0, hl_name, hl_def)
-        end
-      end
-      local c = require('catppuccin.palettes').get_palette()
-      --- Autocmd to Appply my custom highlights when colorscheme is loaded
-      vim.api.nvim_create_autocmd('ColorScheme', {
-        pattern = 'catppuccin',
-        callback = function()
-          -- mod_hl('AvantePopupHint', { fg = c.red, bg = 'NONE', force = true, blend = 10 })
-          -- vim.api.nvim_set_hl(0, 'AvantePopupHint', { fg = c.red, bg = 'NONE', force = true, blend = 110 })
-        end,
-      })
-
       -- Load the ColorScheme
       vim.cmd.colorscheme 'catppuccin'
     end,
