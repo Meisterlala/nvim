@@ -154,7 +154,10 @@ return {
     }
 
     require('mason-lspconfig').setup {
-      ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
+      automatic_enable = {
+        exclude = { 'powershell_es' },
+      },
+      ensure_installed = {},
       automatic_installation = true,
     }
   end,

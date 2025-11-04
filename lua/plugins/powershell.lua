@@ -1,5 +1,5 @@
 return {
-  enabled = false,
+  enabled = true,
   'TheLeoP/powershell.nvim',
   config = function()
     ---@type powershell.user_config
