@@ -113,7 +113,7 @@ return {
 
       providers = {
         copilot = {
-          model = 'gpt-5-mini',
+          model = 'gpt-5',
         },
         openrouter = {
           __inherited_from = 'openai',

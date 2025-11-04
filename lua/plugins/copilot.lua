@@ -18,28 +18,20 @@ return {
   {
     'zbirenbaum/copilot.lua',
     cmd = 'Copilot',
+    dependencies = { 'copilotlsp-nvim/copilot-lsp' },
     event = { 'InsertEnter', 'VeryLazy' },
     config = function()
       require('copilot').setup {
         suggestion = {
           enabled = true,
-          auto_trigger = false,
-          -- keymap = {
-          --   accept = '<M-y>',
-          --   -- You can add additional keymaps below if needed
-          --   accept_word = false,
-          --   accept_line = false,
-          --   next = '<M-n>',
-          --   prev = '<M-p>',
-          --   dismiss = false,
-          -- },
+          auto_trigger = true,
           keymap = {
-            accept = false,
+            accept = '<M-y>',
             -- You can add additional keymaps below if needed
             accept_word = false,
             accept_line = false,
-            next = false,
-            prev = false,
+            next = '<M-n>',
+            prev = '<M-p>',
             dismiss = false,
           },
         },
