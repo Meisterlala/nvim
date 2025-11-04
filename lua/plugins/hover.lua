@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   'lewis6991/hover.nvim',
   config = function()

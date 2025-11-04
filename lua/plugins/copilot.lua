@@ -14,6 +14,7 @@ local function toggle_copilot()
   end
 end
 
+--- @type LazySpec | LazySpec[]
 return {
   {
     'zbirenbaum/copilot.lua',

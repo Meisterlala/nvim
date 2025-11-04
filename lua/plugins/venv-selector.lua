@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   {
     'linux-cultist/venv-selector.nvim',

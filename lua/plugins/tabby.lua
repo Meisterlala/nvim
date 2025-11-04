@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   'nanozuki/tabby.nvim',
   event = 'VeryLazy',

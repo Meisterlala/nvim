@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return { -- Highlight, edit, and navigate code
   'nvim-treesitter/nvim-treesitter',
   build = ':TSUpdate',
@@ -10,9 +11,8 @@ return { -- Highlight, edit, and navigate code
 
     -- load configs module
     local configs = require 'nvim-treesitter.configs'
-    ---@diagnostic disable-next-line: missing-fields
     configs.setup {
-      ensure_installed = { 'c', 'diff', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
+      ensure_installed = {},
       auto_install = true,
       -- Modules
       highlight = {

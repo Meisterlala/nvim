@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   'folke/noice.nvim',
   event = 'VeryLazy',

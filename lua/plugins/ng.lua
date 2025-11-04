@@ -1,6 +1,7 @@
 -- https://github.com/joeveiga/ng.nvim
 -- Angular JS support
 
+--- @type LazySpec | LazySpec[]
 return {
   {
     'joeveiga/ng.nvim',

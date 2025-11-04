@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   -- Main LSP Configuration
   'neovim/nvim-lspconfig',

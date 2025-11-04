@@ -10,6 +10,7 @@ vim.api.nvim_create_autocmd('BufReadPost', {
   end,
 })
 
+--- @type LazySpec | LazySpec[]
 return {
   'hat0uma/csvview.nvim',
   ---@module "csvview"

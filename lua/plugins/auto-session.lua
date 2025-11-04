@@ -1,6 +1,6 @@
 -- Recommended session options
 vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions'
-
+--- @type LazySpec
 return {
   'rmagatti/auto-session',
   enabled = false,

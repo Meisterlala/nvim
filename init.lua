@@ -268,14 +268,16 @@ vim.opt.rtp:prepend(lazypath)
 -- All actual plugin specs are imported from lua/plugins/
 -- Icons are set based on Nerd Font status above for best compatibility.
 require('lazy').setup({
-  { import = 'plugins' },
+  {
+    import = 'plugins',
+  },
 }, {
   checker = {
     enabled = true, -- Enable automatic plugin update checks
     notify = false,
   },
   change_detection = {
-    notify = false, -- Don't show notification when plugin settings change
+    notify = true, -- Don't show notification when plugin settings change
   },
   ui = {
     icons = {

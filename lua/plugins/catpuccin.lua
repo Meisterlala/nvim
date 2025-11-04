@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   {
     'catppuccin/nvim',

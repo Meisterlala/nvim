@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   'lervag/vimtex',
   lazy = false, -- we don't want to lazy load VimTeX

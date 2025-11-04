@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   {
     'xvzc/chezmoi.nvim',

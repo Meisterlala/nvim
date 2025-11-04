@@ -42,6 +42,7 @@ local function code_files_picker(opts)
   }, opts))
 end
 
+--- @type LazySpec | LazySpec[]
 return { -- Fuzzy Finder (files, lsp, etc)
   'nvim-telescope/telescope.nvim',
   event = 'VimEnter',

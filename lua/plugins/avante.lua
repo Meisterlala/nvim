@@ -91,6 +91,7 @@ function really_cool()
   -- Do something here AI:
 end
 
+--- @type LazySpec
 return {
   'yetone/avante.nvim',
   -- Build function

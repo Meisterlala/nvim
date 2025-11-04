@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return {
   'anasinnyk/nvim-k8s-crd',
   event = { 'BufReadPre', 'BufNewFile' },

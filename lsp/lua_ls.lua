@@ -7,8 +7,23 @@ return {
       completion = {
         callSnippet = 'Replace',
       },
-      -- You can toggle below to ignore Lua_LS's noisy `missing-fields` warnings
-      diagnostics = { disable = { 'missing-fields' } },
+      codeLens = {
+        enable = true,
+      },
+      hint = {
+        enable = true,
+        setType = true,
+      },
+      telemetry = {
+        enable = false,
+      },
+
+      -- https://luals.github.io/wiki/settings/#diagnosticsseverity
+      diagnostics = {
+        severity = {
+          ['missing-fields'] = 'Hint',
+        },
+      },
     },
   },
 }

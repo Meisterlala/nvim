@@ -1,3 +1,4 @@
+--- @type LazySpec | LazySpec[]
 return { -- Autoformat
   'stevearc/conform.nvim',
   event = { 'BufWritePre' },

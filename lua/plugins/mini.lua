@@ -105,6 +105,7 @@ local function my_fileinfo()
   return string.format('%s%s %s', ft_icon, filetype, sizeOut)
 end
 
+--- @type LazySpec | LazySpec[]
 return { -- Collection of various small independent plugins/modules
   'echasnovski/mini.nvim',
   config = function()
