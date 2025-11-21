@@ -1,5 +1,8 @@
 local M = {}
 
+-- default excluded rules
+M.ExculeRules = { 'PSAvoidGlobalVars', 'PSUseSingularNouns', 'PSAvoidUsingWriteHost' }
+
 -- auto-install PSScriptAnalyzer if missing
 local function ensure_pssa()
   local check = vim.fn.systemlist 'pwsh -NoProfile -Command "Get-Module -ListAvailable -Name PSScriptAnalyzer"'
@@ -28,6 +31,15 @@ function M.run_pssa()
   local ns = vim.api.nvim_create_namespace 'PSSA'
   local buf_text = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local buffer_content = table.concat(buf_text, '\n')
+  local rules_str = '"' .. table.concat(M.ExculeRules, '", "') .. '"'
+  local pwsh_command = string.format(
+    [[
+      Import-Module PSScriptAnalyzer -Force;
+      Invoke-ScriptAnalyzer -Settings @{ExcludeRules=@(%s)} -ScriptDefinition ([Console]::In.ReadToEnd()) |
+      ForEach-Object { "$($_.Line):$($_.Column):$($_.Severity):$($_.RuleName):$($_.Message)" }
+    ]],
+    rules_str
+  )
 
   local Job = require 'plenary.job'
   Job:new({
@@ -36,14 +48,10 @@ function M.run_pssa()
       '-NoProfile',
       '-NoLogo',
       '-Command',
-      [[
-Import-Module PSScriptAnalyzer -Force;
-Invoke-ScriptAnalyzer -Settings @{ExcludeRules=@("PSAvoidGlobalVars", "PSUseSingularNouns")} -ScriptDefinition ([Console]::In.ReadToEnd()) |
-ForEach-Object { "$($_.Line):$($_.Column):$($_.Severity):$($_.RuleName):$($_.Message)" }
-]],
+      pwsh_command,
     },
     writer = buffer_content, -- plenary pipes this to stdin
-    on_exit = function(j, return_val)
+    on_exit = function(j, _)
       local output = j:result()
       local diagnostics = {}
 
