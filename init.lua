@@ -190,6 +190,9 @@ vim.keymap.set('n', '<leader>id', function()
   vim.api.nvim_put({ date }, 'c', true, true) -- put it below the current line
 end, { desc = '[I]nsert current [d]ate and time' })
 
+-- Yank to system clipboard with leader+y
+vim.keymap.set({ 'n', 'v' }, '<leader>y', [["+y]], { desc = '[Y]ank to system clipboard' })
+
 -- [[ Custom Tabline ]]
 -- Custom tab names
 vim.o.tabline = '%!v:lua.MyTabline()'

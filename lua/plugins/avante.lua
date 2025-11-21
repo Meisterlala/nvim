@@ -133,6 +133,20 @@ return {
             'google/gemini-2.5-flash',
           },
         },
+
+        cerebro = {
+          __inherited_from = 'openai',
+          endpoint = 'https://chat.cerebroai.de/api/v1',
+          api_key_name = 'AVANTE_CEREBRO',
+          model = 'gemini-3-pro-preview',
+          model_names = {
+            'gemini-3-pro-preview',
+            'gemini-2.5-flash',
+            'gpt-5-chat-latest',
+            'gpt-4o',
+          },
+        },
+
         -- openai = {
         -- list_models = {
         --   { id = 'gpt-5', name = 'gpt-5' },
