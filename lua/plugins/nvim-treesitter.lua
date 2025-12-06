@@ -2,6 +2,7 @@
 return { -- Highlight, edit, and navigate code
   'nvim-treesitter/nvim-treesitter',
   build = ':TSUpdate',
+  lazy = false,
   -- Will be needed in the future. Right now main is still broken
   -- branch = 'main',
   config = function()
@@ -10,8 +11,9 @@ return { -- Highlight, edit, and navigate code
     vim.opt.rtp:prepend(install_dir)
 
     -- load configs module
-    local configs = require 'nvim-treesitter.configs'
-    configs.setup {
+    --- @class TSConfig
+    local config = {
+      install_dir = install_dir,
       ensure_installed = {},
       auto_install = true,
       -- Modules
@@ -29,6 +31,19 @@ return { -- Highlight, edit, and navigate code
         -- Disable vim regex
         additional_vim_regex_highlighting = false,
       },
+
+      -- Experimental indent
+      indent = {
+        enable = true,
+      },
     }
+
+    -- Enable folds
+    vim.wo.foldmethod = 'expr'
+    vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    -- Set default fold level
+    vim.opt.foldlevelstart = 99
+
+    require('nvim-treesitter.configs').setup(config)
   end,
 }

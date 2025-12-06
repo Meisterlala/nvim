@@ -43,16 +43,16 @@ return {
       }
 
       -- Hide Copilot suggestions when the completion menu is open
-      local cmp_ok, cmp = pcall(require, 'cmp')
-      if cmp_ok then
-        cmp.event:on('menu_opened', function()
-          vim.b.copilot_suggestion_hidden = true
-        end)
-
-        cmp.event:on('menu_closed', function()
-          vim.b.copilot_suggestion_hidden = false
-        end)
-      end
+      -- local cmp_ok, cmp = pcall(require, 'cmp')
+      -- if cmp_ok then
+      --   cmp.event:on('menu_opened', function()
+      --     vim.b.copilot_suggestion_hidden = true
+      --   end)
+      --
+      --   cmp.event:on('menu_closed', function()
+      --     vim.b.copilot_suggestion_hidden = false
+      --   end)
+      -- end
     end,
     keys = {
       {

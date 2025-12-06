@@ -193,6 +193,9 @@ end, { desc = '[I]nsert current [d]ate and time' })
 -- Yank to system clipboard with leader+y
 vim.keymap.set({ 'n', 'v' }, '<leader>y', [["+y]], { desc = '[Y]ank to system clipboard' })
 
+-- Change fold, to toggle on zz
+vim.keymap.set('n', 'zz', 'za', { desc = 'Toggle fold at current cursor position' })
+
 -- [[ Custom Tabline ]]
 -- Custom tab names
 vim.o.tabline = '%!v:lua.MyTabline()'

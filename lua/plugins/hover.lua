@@ -4,17 +4,18 @@ return {
   config = function()
     require('hover').config {
       -- Require providers
+      --- @type (string|Hover.Config.Provider)[]
       providers = {
         'hover.providers.lsp',
+        'hover.providers.diagnostic',
+        'hover.providers.dap',
         -- require('hover.providers.gh')
         -- require('hover.providers.gh_user')
         -- require('hover.providers.jira')
-        -- require('hover.providers.dap')
         -- require('hover.providers.fold_preview')
-        -- require('hover.providers.diagnostic')
         -- require('hover.providers.man')
         -- require('hover.providers.dictionary')
-        -- require 'hover.providers.highlight'
+        -- 'hover.providers.highlight',
       },
       preview_opts = {
         border = 'none',
@@ -24,7 +25,10 @@ return {
       preview_window = true,
       title = true,
       mouse_providers = {
-        'LSP',
+        -- 'hover.providers.highlight',
+        'hover.providers.lsp',
+        'hover.providers.diagnostic',
+        'hover.providers.dap',
       },
       mouse_delay = 200,
     }
@@ -47,19 +51,14 @@ return {
     -- Auto open docs on hover
     vim.o.updatetime = 2000
     -- But only for LSP attached buffers
-    -- vim.api.nvim_create_autocmd('LspAttach', {
-    --   callback = function(args)
-    --     local bufnr = args.buf
-    --     vim.api.nvim_create_autocmd('CursorHold', {
-    --       buffer = bufnr,
-    --       callback = function()
-    --         -- Check if buffer is valid
-    --         if vim.api.nvim_buf_is_loaded(bufnr) then
-    --           require('hover').open()
-    --         end
-    --       end,
-    --     })
-    --   end,
-    -- })
+    vim.api.nvim_create_autocmd('CursorHold', {
+      callback = function()
+        local bufnr = vim.api.nvim_get_current_buf()
+        -- Check if buffer is valid
+        if vim.api.nvim_buf_is_loaded(bufnr) then
+          require('hover').open()
+        end
+      end,
+    })
   end,
 }
