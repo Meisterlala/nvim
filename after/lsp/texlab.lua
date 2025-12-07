@@ -10,12 +10,12 @@ return {
       build = {
         args = { '-pdf', '-interaction=nonstopmode', '-synctex=1', '%f' },
         executable = 'latexmk',
-        forwardSearchAfter = true,
+        forwardSearchAfter = false,
         onSave = true,
       },
       chktex = {
         onEdit = false,
-        onOpenAndSave = false,
+        onOpenAndSave = true,
       },
       diagnosticsDelay = 300,
       formatterLineLength = 80,
