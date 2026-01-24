@@ -88,6 +88,7 @@ end
 
 --- @type LazySpec
 return {
+  entity = false,
   'yetone/avante.nvim',
   -- Build function
   build = function()
