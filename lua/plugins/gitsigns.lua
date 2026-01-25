@@ -51,5 +51,18 @@ return { -- Adds git related signs to the gutter, as well as utilities for manag
         col = 1,
       },
     }
+
+    vim.api.nvim_create_autocmd('User', {
+      pattern = 'FugitiveChanged',
+      callback = function()
+        require('gitsigns').refresh()
+      end,
+    })
+
+    -- vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter' }, {
+    --   callback = function()
+    --     require('gitsigns').refresh()
+    --   end,
+    -- })
   end,
 }

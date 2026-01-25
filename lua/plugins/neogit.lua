@@ -78,6 +78,7 @@ return {
           -- is also selected then telescope is used instead
           -- Requires you to have `folke/snacks.nvim` installed.
           snacks = false,
+          gitsigns = true,
         },
 
         mappings = {
