@@ -45,6 +45,6 @@ return { -- Highlight, edit, and navigate code
     -- Set default fold level
     vim.opt.foldlevelstart = 99
 
-    require('nvim-treesitter.config').setup(config)
+    require('nvim-treesitter.configs').setup(config)
   end,
 }
