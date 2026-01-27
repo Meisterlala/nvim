@@ -5,6 +5,7 @@ return { -- Highlight, edit, and navigate code
   lazy = false,
   -- Will be needed in the future. Right now main is still broken
   -- branch = 'main',
+  branch = 'master',
   config = function()
     -- Add install dir to rtp
     local install_dir = vim.fn.stdpath 'data' .. '/site'
@@ -44,6 +45,6 @@ return { -- Highlight, edit, and navigate code
     -- Set default fold level
     vim.opt.foldlevelstart = 99
 
-    require('nvim-treesitter.configs').setup(config)
+    require('nvim-treesitter.config').setup(config)
   end,
 }
