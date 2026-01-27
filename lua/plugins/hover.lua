@@ -48,14 +48,12 @@ return {
 
     vim.o.mousemoveevent = true
 
-    -- Auto open docs on hover
-    vim.o.updatetime = 2000
-    -- But only for LSP attached buffers
+    -- Auto open docs on hover, but only for LSP-attached buffers
     vim.api.nvim_create_autocmd('CursorHold', {
+      group = vim.api.nvim_create_augroup('hover_auto_open', { clear = true }),
       callback = function()
         local bufnr = vim.api.nvim_get_current_buf()
-        -- Check if buffer is valid
-        if vim.api.nvim_buf_is_loaded(bufnr) then
+        if vim.api.nvim_buf_is_loaded(bufnr) and #vim.lsp.get_clients { bufnr = bufnr } > 0 then
           require('hover').open()
         end
       end,

@@ -2,7 +2,7 @@
 return {
   {
     'folke/snacks.nvim',
-    priority = 900, -- High, but after colors
+    priority = 1000,
     lazy = false,
     ---@module "snacks"
     ---@class snacks.Config

@@ -44,9 +44,9 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- [[ Language and Encoding ]]
--- Set local language to English for consistent messages and sort order.
+-- Set language to English with UTF-8 support for proper Unicode rendering
 -- See :help :language
-vim.cmd 'language C'
+vim.cmd 'language en_US.UTF-8'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 -- Used to determine icon style in plugin UIs (see below)
@@ -105,7 +105,7 @@ vim.opt.directory = vim.fn.expand '~/.vim/swapdir' -- Swap director
 vim.opt.undofile = true -- Persistent undo
 vim.opt.undolevels = 50000 -- Amount of undus to save
 vim.opt.undodir = vim.fn.expand '~/.vim/undodir' -- Undo directory
-vim.opt.updatetime = 300 -- Faster completion
+vim.opt.updatetime = 300 -- Faster completion and hover (CursorHold delay)
 vim.opt.timeoutlen = 500 -- Key timeout duration
 vim.opt.ttimeoutlen = 0 -- Key code timeout
 vim.opt.autoread = true -- Auto reload files changed outside vim
