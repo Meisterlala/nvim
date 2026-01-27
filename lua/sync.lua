@@ -71,7 +71,8 @@ function M.get_nvim_config_git_status()
 end
 
 -- Trigger Git status check when nvim config files are saved
-vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
+vim.api.nvim_create_autocmd('BufWritePost', {
+  group = vim.api.nvim_create_augroup('sync_on_save', { clear = true }),
   pattern = {
     vim.fn.stdpath 'config' .. '*',
     vim.fn.stdpath 'config' .. '**/*',
@@ -81,6 +82,43 @@ vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
   },
   callback = function()
     M.refresh_nvim_config_git_status()
+  end,
+})
+
+-- Trigger Git status check after neogit operations
+vim.api.nvim_create_autocmd('User', {
+  group = vim.api.nvim_create_augroup('sync_on_neogit', { clear = true }),
+  pattern = {
+    'NeogitCommitComplete',
+    'NeogitPushComplete',
+    'NeogitPullComplete',
+    'NeogitStatusRefreshed',
+  },
+  callback = function(ev)
+    local cwd = vim.fn.getcwd()
+    local config_dir = vim.fn.stdpath 'config'
+    if vim.startswith(cwd, config_dir) or cwd == config_dir then
+      vim.defer_fn(M.refresh_nvim_config_git_status, 200)
+    end
+  end,
+})
+
+-- Also refresh when closing neogit buffer
+vim.api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('sync_neogit_close', { clear = true }),
+  pattern = 'NeogitStatus',
+  callback = function(ev)
+    vim.api.nvim_create_autocmd('BufDelete', {
+      buffer = ev.buf,
+      once = true,
+      callback = function()
+        local cwd = vim.fn.getcwd()
+        local config_dir = vim.fn.stdpath 'config'
+        if vim.startswith(cwd, config_dir) or cwd == config_dir then
+          vim.defer_fn(M.refresh_nvim_config_git_status, 200)
+        end
+      end,
+    })
   end,
 })
 
