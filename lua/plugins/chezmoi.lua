@@ -60,7 +60,7 @@ return {
   },
   {
     'alker0/chezmoi.vim',
-    lazy = false,
+    event = 'VeryLazy', -- Only needed for template syntax
     init = function()
       vim.g['chezmoi#use_tmp_buffer'] = true
     end,

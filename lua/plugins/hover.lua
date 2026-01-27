@@ -1,6 +1,13 @@
 --- @type LazySpec | LazySpec[]
 return {
   'lewis6991/hover.nvim',
+  keys = {
+    { 'K', desc = 'Hover documentation' },
+    { 'gK', desc = 'Hover select provider' },
+    { '<C-p>', mode = 'n', desc = 'Hover previous source' },
+    { '<C-n>', mode = 'n', desc = 'Hover next source' },
+    { '<MouseMove>', mode = 'n', desc = 'Hover mouse' },
+  },
   config = function()
     require('hover').config {
       -- Require providers

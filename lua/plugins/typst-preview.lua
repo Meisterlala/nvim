@@ -1,7 +1,7 @@
 --- @type LazySpec | LazySpec[]
 return {
   'chomosuke/typst-preview.nvim',
-  lazy = false, -- or ft = 'typst'
+  ft = 'typst', -- Only load for Typst files
   version = '1.*',
   opts = {}, -- lazy.nvim will implicitly calls `setup {}`
   config = function()

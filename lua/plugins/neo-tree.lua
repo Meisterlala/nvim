@@ -11,7 +11,6 @@ return {
     'MunifTanjim/nui.nvim',
   },
   cmd = 'Neotree',
-  lazy = false, -- neo-tree will lazily load itself
   keys = {
     { 'ß', ':Neotree reveal<CR>', desc = 'NeoTree reveal', silent = true },
   },
