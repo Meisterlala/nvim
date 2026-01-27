@@ -22,51 +22,37 @@ local function sync_git_status()
   return sync_mod.get_nvim_config_git_status() or ''
 end
 
--- Cache variable outside the function to persist between calls
-local cached_managed_files = nil
+-- Chezmoi statusbar indicator
+local chezmoi_cache = {}
+local chezmoi_dir = vim.env.HOME .. '/.local/share/chezmoi'
 
 local function chezmoi_file()
-  -- Check if chezmoi is installed
   if vim.fn.executable 'chezmoi' == 0 then
     return ''
   end
 
-  local current_file = vim.fn.expand '%:p' -- Full path of the current file
-  local home_dir = vim.env.HOME -- Get the home directory
-  local chezmoi_dir = home_dir .. '/.local/share/chezmoi'
-
-  -- Skip if editing the source file in the chezmoi directory
-  if current_file:sub(1, #chezmoi_dir) == chezmoi_dir then
-    return ''
+  local bufnr = vim.api.nvim_get_current_buf()
+  if chezmoi_cache[bufnr] ~= nil then
+    return chezmoi_cache[bufnr]
   end
 
-  local ok, chezmoi = pcall(require, 'chezmoi.commands')
-  if not ok then
-    return ''
+  local filepath = vim.api.nvim_buf_get_name(bufnr)
+  local result = ''
+
+  if filepath ~= '' and vim.bo.buftype == '' and vim.startswith(filepath, chezmoi_dir .. '/') then
+    result = 'CHEZMOI'
   end
 
-  -- Use cached managed files if available, otherwise fetch and cache
-  if not cached_managed_files then
-    cached_managed_files = chezmoi.list {}
-  end
-
-  for _, file in ipairs(cached_managed_files) do
-    local full_managed_path = home_dir .. '/' .. file
-    if full_managed_path == current_file then
-      local edit_watch = function()
-        vim.notify 'You opened a file that is managed by chezmoi'
-        chezmoi.edit {
-          targets = { current_file },
-          args = { '--watch', '--apply' },
-        }
-      end
-      vim.schedule(edit_watch)
-      return 'Chezmoi File'
-    end
-  end
-
-  return ''
+  chezmoi_cache[bufnr] = result
+  return result
 end
+
+vim.api.nvim_create_autocmd('BufDelete', {
+  group = vim.api.nvim_create_augroup('chezmoi_statusline', { clear = true }),
+  callback = function(ev)
+    chezmoi_cache[ev.buf] = nil
+  end,
+})
 
 --- Returns filetype icon, name and size
 local function my_fileinfo()
@@ -228,7 +214,8 @@ return { -- Collection of various small independent plugins/modules
             '%<', -- Mark general truncate point
             { hl = 'MiniStatuslineFilename', strings = { filename } },
             '%=', -- End left alignment
-            { hl = 'MiniStatuslineInactive', strings = { chezmoi_status, git_status } },
+            { hl = 'MiniStatuslineInactive', strings = { git_status } },
+            { hl = mode_hl, strings = { chezmoi_status } },
             { hl = 'MiniStatuslineFileinfo', strings = { lazy_updates_status(), my_fileinfo() } },
             { hl = mode_hl, strings = { search, location } },
           }

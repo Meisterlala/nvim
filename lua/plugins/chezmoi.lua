@@ -4,75 +4,77 @@ return {
     'xvzc/chezmoi.nvim',
     dependencies = { 'nvim-lua/plenary.nvim' },
     config = function()
-      -- Auto run chezmoi apply
-      --  e.g. ~/.local/share/chezmoi/*
+      require('chezmoi').setup {
+        edit = { watch = true, force = false },
+        events = {
+          on_open = { notification = { enable = true, msg = 'Opened chezmoi file' } },
+          on_watch = { notification = { enable = false } },
+          on_apply = { notification = { enable = true, msg = 'Applied' } },
+        },
+        telescope = { select = { '<CR>' } },
+      }
+
+      local chezmoi_dir = vim.env.HOME .. '/.local/share/chezmoi'
+
       vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
-        pattern = { vim.fn.expand '~/.local/share/chezmoi/' .. '*' },
+        group = vim.api.nvim_create_augroup('chezmoi_auto_edit', { clear = true }),
         callback = function(ev)
-          local bufnr = ev.buf
-          local edit_watch = function()
-            require('chezmoi.commands.__edit').watch(bufnr)
+          if vim.fn.executable 'chezmoi' == 0 then
+            return
           end
-          vim.schedule(edit_watch)
+
+          local filepath = vim.api.nvim_buf_get_name(ev.buf)
+          if filepath == '' then
+            return
+          end
+
+          -- If already in chezmoi source dir, enable auto-apply
+          if vim.startswith(filepath, chezmoi_dir .. '/') then
+            vim.schedule(function()
+              require('chezmoi.commands.__edit').watch(ev.buf)
+            end)
+            return
+          end
+
+          -- Check if file is managed and switch to source
+          vim.schedule(function()
+            local cmd = string.format('chezmoi source-path %s 2>/dev/null', vim.fn.shellescape(filepath))
+            local handle = io.popen(cmd)
+            if not handle then
+              return
+            end
+
+            local source_path = handle:read '*l'
+            handle:close()
+
+            if source_path and source_path ~= '' then
+              require('chezmoi.commands.__edit').execute {
+                targets = { filepath },
+                args = { '--watch' },
+              }
+            end
+          end)
         end,
       })
-
-      require('chezmoi').setup {
-        {
-          edit = {
-            watch = true,
-            force = false,
-          },
-          events = {
-            on_open = {
-              notification = {
-                enable = true,
-                msg = 'Opened a chezmoi-managed file',
-                opts = {},
-              },
-            },
-            on_watch = {
-              notification = {
-                enable = true,
-                msg = 'This file will be automatically applied',
-                opts = {},
-              },
-            },
-            on_apply = {
-              notification = {
-                enable = true,
-                msg = 'Successfully applied',
-                opts = {},
-              },
-            },
-          },
-          telescope = {
-            select = { '<CR>' },
-          },
-        },
-      }
     end,
   },
   {
     'alker0/chezmoi.vim',
     lazy = false,
     init = function()
-      -- This option is required.
       vim.g['chezmoi#use_tmp_buffer'] = true
-      -- add other options here if needed.
     end,
     config = function()
-      -- try env vars in this order for max compatibility
       local temp = os.getenv 'TMPDIR' or os.getenv 'TMP' or os.getenv 'TEMP' or '/tmp'
-      -- Match any files in tmp that start with chezmoi-
       local pattern = temp:gsub('\\', '/') .. '/chezmoi%-[^/]+/.+'
+
       vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
+        group = vim.api.nvim_create_augroup('chezmoi_tmpl', { clear = true }),
         callback = function(args)
           local fname = args.file:gsub('\\', '/')
           if fname:match(pattern) then
-            -- auto-detect the buffer format
-            local type = vim.filetype.match { buf = args.buf } or ''
-            vim.api.nvim_set_option_value('filetype', type .. '.chezmoitmpl', { buf = args.buf })
+            local filetype = vim.filetype.match { buf = args.buf } or ''
+            vim.bo[args.buf].filetype = filetype .. '.chezmoitmpl'
           end
         end,
       })
