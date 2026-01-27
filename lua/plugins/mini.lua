@@ -26,6 +26,11 @@ end
 local cached_managed_files = nil
 
 local function chezmoi_file()
+  -- Check if chezmoi is installed
+  if vim.fn.executable 'chezmoi' == 0 then
+    return ''
+  end
+
   local current_file = vim.fn.expand '%:p' -- Full path of the current file
   local home_dir = vim.env.HOME -- Get the home directory
   local chezmoi_dir = home_dir .. '/.local/share/chezmoi'
