@@ -1,11 +1,9 @@
 --- @type LazySpec | LazySpec[]
-return { -- Highlight, edit, and navigate code
+return {
   'nvim-treesitter/nvim-treesitter',
   build = ':TSUpdate',
   lazy = false,
-  -- Will be needed in the future. Right now main is still broken
-  -- branch = 'main',
-  branch = 'master',
+  branch = 'main',
   config = function()
     -- Add install dir to rtp
     local install_dir = vim.fn.stdpath 'data' .. '/site'
@@ -38,13 +36,15 @@ return { -- Highlight, edit, and navigate code
         enable = true,
       },
     }
+    require('nvim-treesitter').setup(config)
 
-    -- Enable folds
-    vim.wo.foldmethod = 'expr'
+    -- Enable Folding
     vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo.foldmethod = 'expr'
     -- Set default fold level
     vim.opt.foldlevelstart = 99
 
-    require('nvim-treesitter.configs').setup(config)
+    -- Enable Treesitter based indentation
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
   end,
 }
