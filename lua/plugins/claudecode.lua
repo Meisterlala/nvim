@@ -3,6 +3,7 @@ return {
   'coder/claudecode.nvim',
   dependencies = { 'folke/snacks.nvim' },
   lazy = false,
+  --- @module 'claudecode'
   --- @type PartialClaudeCodeConfig
   opts = {
     -- Server Configuration

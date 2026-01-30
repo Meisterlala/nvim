@@ -46,5 +46,17 @@ return {
 
     -- Enable Treesitter based indentation
     vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+
+    -- Auto-attach treesitter to all buffers
+    local augroup = vim.api.nvim_create_augroup('TreesitterAutoAttach', { clear = true })
+    vim.api.nvim_create_autocmd({ 'FileType', 'BufEnter' }, {
+      group = augroup,
+      callback = function(args)
+        local buf = args.buf
+        if vim.bo[buf].buftype == '' then
+          pcall(vim.treesitter.start, buf)
+        end
+      end,
+    })
   end,
 }

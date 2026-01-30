@@ -20,7 +20,7 @@ return {
         custom_highlights = function(colors)
           return {
 
-            RenderMarkdownCode = { bg = colors.mantle },
+            -- RenderMarkdownCode = { bg = colors.surface0 },
             -- NeoTreeNormal = { bg = colors.none },
 
             MiniStatuslineFilename = { fg = colors.text, bg = trans and colors.none or colors.mantle },
