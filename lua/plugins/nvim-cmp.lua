@@ -1,7 +1,8 @@
 --- @type LazySpec | LazySpec[]
 return { -- Autocompletion
   'hrsh7th/nvim-cmp',
-  event = 'InsertEnter',
+  -- Lazy load or  InsertEnter
+  event = { 'InsertEnter', 'VeryLazy' },
   dependencies = {
     -- Snippet Engine & its associated nvim-cmp source
     {
