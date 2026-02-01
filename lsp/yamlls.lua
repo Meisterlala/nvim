@@ -12,6 +12,7 @@ return {
       -- Can never be emtpy, because of a nvim-k8s-crd bug
       schemas = {
         ['https://json.schemastore.org/kustomization.json'] = '**/kustomization.yaml',
+        for_k8s = 'abdddsdfsdfsdfsdf',
       },
       validate = true,
     },
