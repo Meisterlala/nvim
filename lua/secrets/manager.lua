@@ -8,8 +8,8 @@ local M = {}
 local ENCRYPTED_FILE = vim.fn.stdpath 'config' .. '/lua/secrets/secrets.enc'
 local DECRYPTED_FILE = vim.fn.stdpath 'config' .. '/lua/secrets/decrypted.lua'
 
--- Encryption algorithm (chacha20 is modern and fast)
-local CIPHER = 'chacha20'
+-- Encryption algorithm (AES-256-CBC with PBKDF2)
+local CIPHER = 'aes-256-cbc'
 
 ---Load decrypted secrets file and return the table
 ---@return table|nil secrets {password = "...", env = {...}}
