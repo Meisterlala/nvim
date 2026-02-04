@@ -129,11 +129,7 @@ function M.fetch_models(provider_name, config, cb)
     headers = headers,
     callback = function(res)
       if res.status ~= 200 then
-        vim.schedule(function()
-          local msg = string.format('Failed to fetch %s models: HTTP %d', provider_name, res.status)
-          log.warn(msg)
-          vim.notify(msg, vim.log.levels.WARN)
-        end)
+        log.warn(string.format('Failed to fetch %s models: HTTP %d', provider_name, res.status))
         -- Fallback to default models
         vim.schedule(function()
           cb(config.default_models)
@@ -143,11 +139,7 @@ function M.fetch_models(provider_name, config, cb)
 
       local ok, body = pcall(json.decode, res.body)
       if not ok or not body then
-        vim.schedule(function()
-          local msg = string.format('Error decoding %s response', provider_name)
-          log.error(msg)
-          vim.notify(msg, vim.log.levels.ERROR)
-        end)
+        log.error(string.format('Error decoding %s response', provider_name))
         vim.schedule(function()
           cb(config.default_models)
         end)
@@ -176,12 +168,41 @@ function M.fetch_models(provider_name, config, cb)
   })
 end
 
+--- Inject models into avante provider configuration
+--- @param provider_name string Name of the avante provider (e.g., 'openrouter', 'cerebro')
+--- @param models string[]? List of models to inject
+function M.inject_into_avante(provider_name, models)
+  local log = require('plenary.log').new { plugin = 'model_fetcher' }
+
+  if not models or #models == 0 then
+    log.debug('No models to inject for ' .. provider_name)
+    return
+  end
+
+  -- Check if avante is loaded
+  local has_avante, avante_config = pcall(require, 'avante.config')
+  if not has_avante then
+    log.debug('Avante not loaded, skipping model injection for ' .. provider_name)
+    return
+  end
+
+  -- Update the provider's model_names
+  vim.schedule(function()
+    if avante_config.providers and avante_config.providers[provider_name] then
+      avante_config.providers[provider_name].model_names = models
+      log.debug(string.format('Injected %d models into avante provider: %s', #models, provider_name))
+    else
+      log.debug(string.format('Avante provider "%s" not found in config', provider_name))
+    end
+  end)
+end
+
 --- Convenience function for OpenRouter
 --- @param cb fun(models: string[]?)
 function M.fetch_openrouter_models(cb)
   M.fetch_models('openrouter', {
     endpoint = 'https://openrouter.ai/api/v1/models',
-    api_key_env = 'OPENROUTER_API_KEY',
+    api_key_env = 'AVANTE_OPENROUTER_API_KEY',
     default_models = {
       'anthropic/claude-sonnet-4-20250514',
       'deepseek/deepseek-chat-v3.1',
@@ -200,7 +221,10 @@ function M.fetch_openrouter_models(cb)
       end
       return models
     end,
-  }, cb)
+  }, function(models)
+    M.inject_into_avante('openrouter', models)
+    cb(models)
+  end)
 end
 
 --- Convenience function for Cerebro
@@ -232,7 +256,10 @@ function M.fetch_cerebro_models(cb)
       end
       return nil
     end,
-  }, cb)
+  }, function(models)
+    M.inject_into_avante('cerebro', models)
+    cb(models)
+  end)
 end
 
 return M
