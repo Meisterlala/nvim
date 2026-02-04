@@ -26,15 +26,15 @@ return {
       },
 
       -- Load types from Neovim runtime and installed plugins
-      -- workspace = {
-      --   library = {
-      --     vim.env.VIMRUNTIME,
-      --     "${3rd}/luv/library",
-      --     -- Add lazy.nvim plugin directories
-      --     vim.fn.stdpath('data') .. '/lazy',
-      --   },
-      --   checkThirdParty = false,
-      -- },
+      workspace = {
+        library = {
+          vim.env.VIMRUNTIME,
+          '${3rd}/luv/library',
+          -- Add lazy.nvim plugin directories
+          -- vim.fn.stdpath 'data' .. '/lazy',
+        },
+        checkThirdParty = false,
+      },
     },
   },
 }
