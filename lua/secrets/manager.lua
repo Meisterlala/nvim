@@ -53,9 +53,9 @@ function M.decrypt(password)
     return false, 'Password required'
   end
 
-  -- Use openssl for decryption
+  -- Use openssl for decryption (with explicit iter count for cross-platform compatibility)
   local cmd = string.format(
-    'openssl enc -%s -d -pbkdf2 -in %s -out %s -pass pass:%s 2>&1',
+    'openssl enc -%s -d -pbkdf2 -iter 100000 -in %s -out %s -pass pass:%s 2>&1',
     CIPHER,
     vim.fn.shellescape(ENCRYPTED_FILE),
     vim.fn.shellescape(DECRYPTED_FILE),
@@ -117,9 +117,9 @@ function M.encrypt(new_password)
     file:close()
   end
 
-  -- Use openssl for symmetric encryption
+  -- Use openssl for symmetric encryption (with explicit iter count for cross-platform compatibility)
   local cmd = string.format(
-    'openssl enc -%s -salt -pbkdf2 -in %s -out %s -pass pass:%s 2>&1',
+    'openssl enc -%s -salt -pbkdf2 -iter 100000 -in %s -out %s -pass pass:%s 2>&1',
     CIPHER,
     vim.fn.shellescape(DECRYPTED_FILE),
     vim.fn.shellescape(ENCRYPTED_FILE),
