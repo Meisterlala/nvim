@@ -1,6 +1,8 @@
 --- @type LazySpec | LazySpec[]
 return {
-  'folke/noice.nvim',
+  -- 'folke/noice.nvim',
+  -- Forked to fix some issues
+  'RayGuo-ergou/noice.nvim',
   event = 'VeryLazy',
   config = function()
     require('noice').setup {
