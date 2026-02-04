@@ -1,1 +1,4 @@
 lazy-lock.json
+
+# Secrets - decrypted files
+lua/secrets/decrypted.lua

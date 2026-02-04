@@ -274,6 +274,13 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end ---@diagnostic disable-next-line: undefined-field
 vim.opt.rtp:prepend(lazypath)
 
+-- [[ Load Encrypted Secrets ]]
+-- Auto-load secrets if password is set and encrypted file exists
+-- Use :SecretManager set <password> to set password, then :SecretManager load
+pcall(function()
+  require('secrets.manager').auto_load()
+end)
+
 -- [[ Configure and Load Plugins with lazy.nvim ]]
 --
 -- All actual plugin specs are imported from lua/plugins/
