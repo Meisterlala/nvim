@@ -37,14 +37,12 @@ return {
       },
       dashboard = {
         enabled = true,
-        width = 85,
+        width = 95,
         preset = {
           keys = {
             { icon = ' ', key = 'f', desc = 'Find File', action = ':Telescope find_files' },
             { icon = ' ', key = 'n', desc = 'New File', action = ':ene | startinsert' },
             { icon = ' ', key = 'r', desc = 'Recent Files', action = ":lua Snacks.dashboard.pick('oldfiles')" },
-            { icon = ' ', key = 'c', desc = 'Config', action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})" },
-            { icon = ' ', key = 's', desc = 'Restore Session', action = '<cmd>SessionSearch<CR>' },
             { icon = '󰒲 ', key = 'L', desc = 'Lazy', action = ':Lazy', enabled = package.loaded.lazy ~= nil },
             { icon = ' ', key = 'q', desc = 'Quit', action = ':qa' },
           },
