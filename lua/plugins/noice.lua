@@ -3,6 +3,7 @@ return {
   -- 'folke/noice.nvim',
   -- Forked to fix some issues
   'RayGuo-ergou/noice.nvim',
+  commit = 'd68eb1859c40ed13594779935d0285ec0be0da1c',
   event = 'VeryLazy',
   config = function()
     require('noice').setup {
