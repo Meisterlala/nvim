@@ -140,6 +140,8 @@ vim.g.loaded_ruby_provider = 0
 
 -- [[ Basic Keymaps ]]
 -- See :help vim.keymap.set
+-- Mac workaround
+vim.keymap.set('i', '<M-7>', '|')
 
 -- Set up config sync via Lua module (see lua/sync.lua)
 local nimv_sync = require 'sync'
