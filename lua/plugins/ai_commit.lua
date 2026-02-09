@@ -8,10 +8,10 @@ local CONFIG = {
   model_name = nil, -- Friendly display name for selected model
 
   temperature = 0.3, -- Lower = more focused, higher = more creative
-  max_tokens = 1500, -- Max length of generated message
+  max_tokens = 1000, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
   max_diff_chars = 100000, -- Truncate very large diffs before sending to model
-  chat_timeout = 20000, -- Chat completion timeout (ms)
+  chat_timeout = 30000, -- Chat completion timeout (ms)
   model_highlight_group = 'Special', -- Highlight group for model name in spinner status
 }
 
@@ -1025,7 +1025,7 @@ local function insert_ai_commit_message()
     if inserted then
       log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
     else
-      log.info('Generated commit message but skipped insert because buffer is no longer available')
+      log.info 'Generated commit message but skipped insert because buffer is no longer available'
     end
   end
 
