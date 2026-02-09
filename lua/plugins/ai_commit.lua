@@ -51,7 +51,7 @@ ADDITIONAL GUIDELINES:
 - Type casing: Any casing may be used, but be consistent (prefer lowercase)
 - SemVer relationship: fix = PATCH, feat = MINOR, BREAKING CHANGE = MAJOR
 - Revert commits: Use "revert" type with footer referencing commit SHAs
-- BREAKING CHANGE: Use SPARINGLY. ONLY for actual breaking API changes affecting existing users
+- BREAKING CHANGE: Use SPARINGLY. ONLY for big, actual breaking changes.
 - BREAKING CHANGE: Adding new features is NOT breaking. Only for removed/changed functionality.
 
 Current branch: %s
