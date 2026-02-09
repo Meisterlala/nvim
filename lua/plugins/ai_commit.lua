@@ -169,6 +169,22 @@ local function format_body_for_log(body, max_len)
   return compact:sub(1, limit) .. '...'
 end
 
+---@param count integer
+---@return string
+local function format_count_short(count)
+  if count >= 1000000 then
+    local value = string.format('%.1fm', count / 1000000)
+    return value:gsub('%.0m$', 'm')
+  end
+
+  if count >= 1000 then
+    local value = string.format('%.1fk', count / 1000)
+    return value:gsub('%.0k$', 'k')
+  end
+
+  return tostring(count)
+end
+
 -- Try to get headers from Avante's copilot provider (so we don't maintain them)
 local function get_copilot_headers()
   local ok, avante_copilot = pcall(require, 'avante.providers.copilot')
@@ -355,7 +371,7 @@ local function get_recent_commits_async(count, callback)
 end
 
 --- Get staged changes diff (async with plenary)
----@param callback function(string|nil)
+---@param callback function(string|nil, table|nil)
 local function get_staged_diff_async(callback)
   local log = setup_logger()
   log.debug 'Getting staged changes diff'
@@ -368,16 +384,22 @@ local function get_staged_diff_async(callback)
       on_exit = vim.schedule_wrap(function(job, code)
         if code ~= 0 then
           log.error 'Failed to get staged changes'
-          callback(nil)
+          callback(nil, nil)
           return
         end
 
         local result = table.concat(job:result(), '\n')
         if result == '' or result:match '^%s*$' then
           log.warn 'No staged changes found'
-          callback(nil)
+          callback(nil, nil)
           return
         end
+
+        local diff_meta = {
+          original_chars = #result,
+          sent_chars = #result,
+          truncated = false,
+        }
 
         if #result > CONFIG.max_diff_chars then
           local head_len = math.floor(CONFIG.max_diff_chars * 0.7)
@@ -389,12 +411,14 @@ local function get_staged_diff_async(callback)
 
           local marker = string.format('\n\n[... diff truncated by ai_commit: original=%d chars, kept=%d chars ...]\n\n', #result, CONFIG.max_diff_chars)
           result = result:sub(1, head_len) .. marker .. result:sub(tail_start)
+          diff_meta.truncated = true
+          diff_meta.sent_chars = #result
           log.warn(string.format('Staged diff exceeded max size, truncated to %d chars', CONFIG.max_diff_chars))
         end
 
         local diff_size = #result
         log.info(string.format('Got staged diff (%d bytes)', diff_size))
-        callback(result)
+        callback(result, diff_meta)
       end),
     })
     :start()
@@ -430,16 +454,27 @@ end
 ---@param branch string
 ---@param recent_commits string
 ---@param diff string
----@param callback function(string|nil)
-local function generate_commit_message_async(branch, recent_commits, diff, callback)
+---@param callback function(string|nil, table|nil)
+---@param status_callback function(string)|nil
+local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback)
   local log = setup_logger()
   log.info 'Starting commit message generation'
+
+  local function report_status(message)
+    if status_callback then
+      status_callback(message)
+    end
+  end
+
+  local requested_model = CONFIG.model or 'auto'
+
+  report_status('Authenticating with Copilot')
 
   get_api_token_async(function(token)
     if not token then
       log.error 'Failed to get API token'
       vim.notify('Could not get Copilot API token. See ai-commit logs.', vim.log.levels.ERROR)
-      callback(nil)
+      callback(nil, nil)
       return
     end
 
@@ -454,6 +489,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     headers['Content-Type'] = 'application/json'
 
     -- Format the full prompt with context
+    report_status('Preparing prompt')
     local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
     log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
     log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
@@ -470,6 +506,8 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
       request_body.model = CONFIG.model
     end
 
+    report_status('Waiting for Copilot response')
+
     curl.post(endpoint .. '/chat/completions', {
       headers = headers,
       body = vim.json.encode(request_body),
@@ -481,7 +519,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
           local response_body = format_body_for_log(response.body)
           log.error(string.format('Copilot API error: %d (took %.0fms) body=%s', response.status, elapsed_ms, response_body))
           vim.notify('Copilot API request failed (' .. response.status .. '). See ai-commit logs for response body.', vim.log.levels.ERROR)
-          callback(nil)
+          callback(nil, nil)
           return
         end
 
@@ -489,13 +527,14 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
         if not ok or not data.choices or not data.choices[1] or not data.choices[1].message then
           log.error('Failed to parse Copilot response body=' .. format_body_for_log(response.body))
           vim.notify('Failed to parse Copilot response. See ai-commit logs for response body.', vim.log.levels.ERROR)
-          callback(nil)
+          callback(nil, nil)
           return
         end
 
         local message = clean_message(data.choices[1].message.content)
-        log.info(string.format('Generated commit message (took %.0fms): %s', elapsed_ms, message:sub(1, 50) .. '...'))
-        callback(message)
+        local used_model = data.model or request_body.model or 'auto'
+        log.info(string.format('Generated commit message (took %.0fms, model=%s): %s', elapsed_ms, used_model, message:sub(1, 50) .. '...'))
+        callback(message, { requested_model = requested_model, used_model = used_model })
       end),
     })
   end)
@@ -628,8 +667,13 @@ local function start_spinner(bufnr)
   local log = setup_logger()
   log.debug('Starting spinner for buffer ' .. bufnr)
 
+  local spinner = {
+    timer = nil,
+    extmark_id = nil,
+    status_text = 'Preparing commit message',
+  }
+
   local frame_idx = 1
-  local extmark_id = nil
 
   local function update_spinner()
     if not vim.api.nvim_buf_is_valid(bufnr) then
@@ -638,17 +682,17 @@ local function start_spinner(bufnr)
     end
 
     local row, col = 0, 0
-    if extmark_id then
-      local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, state.ns_id, extmark_id, {})
+    if spinner.extmark_id then
+      local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, state.ns_id, spinner.extmark_id, {})
       if pos and #pos >= 2 then
         row, col = pos[1], pos[2]
       end
     end
 
-    extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, {
-      id = extmark_id,
+    spinner.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, {
+      id = spinner.extmark_id,
       right_gravity = false,
-      virt_text = { { string.format('%s Generating commit message...', SPINNER_FRAMES[frame_idx]), 'Comment' } },
+      virt_text = { { string.format('%s %s', SPINNER_FRAMES[frame_idx], spinner.status_text), 'Comment' } },
       virt_text_pos = 'eol',
     })
 
@@ -660,11 +704,23 @@ local function start_spinner(bufnr)
   if timer then
     timer:start(CONFIG.spinner_interval, CONFIG.spinner_interval, vim.schedule_wrap(update_spinner))
   end
+  spinner.timer = timer
+  spinner.update = update_spinner
 
-  return {
-    timer = timer,
-    extmark_id = extmark_id,
-  }
+  return spinner
+end
+
+---@param spinner table|nil
+---@param status_text string
+local function set_spinner_status(spinner, status_text)
+  if not spinner then
+    return
+  end
+
+  spinner.status_text = status_text
+  if spinner.update then
+    spinner.update()
+  end
 end
 
 --- Stop spinner and clear virtual text
@@ -730,12 +786,48 @@ local function insert_ai_commit_message()
 
   local spinner = start_spinner(bufnr)
   local done = false
+  local context_total = 3
+  local context_done = 0
 
-  local function finalize(message)
+  local context = {
+    branch = nil,
+    recent_commits = nil,
+    diff = nil,
+    diff_meta = nil,
+    model_requested = CONFIG.model or 'auto',
+  }
+
+  local function spinner_stats_text()
+    local parts = { 'model:' .. context.model_requested }
+    if context.diff_meta then
+      if context.diff_meta.truncated then
+        table.insert(
+          parts,
+          string.format('diff:%s/%s trunc', format_count_short(context.diff_meta.sent_chars), format_count_short(context.diff_meta.original_chars))
+        )
+      else
+        table.insert(parts, 'diff:' .. format_count_short(context.diff_meta.sent_chars))
+      end
+    end
+    return table.concat(parts, ' | ')
+  end
+
+  local function set_stage_status(stage_text)
+    set_spinner_status(spinner, stage_text .. ' | ' .. spinner_stats_text())
+  end
+
+  set_stage_status(string.format('Preparing context (%d/%d)', context_done, context_total))
+
+  local function finalize(message, generation_meta)
     if done then
       return
     end
     done = true
+
+    if message then
+      local model_used = (generation_meta and generation_meta.used_model) or context.model_requested
+      set_stage_status('Inserting message (model: ' .. model_used .. ')')
+    end
 
     local insert_row = stop_spinner(bufnr, spinner)
     state.in_flight_buffers[bufnr] = nil
@@ -769,21 +861,33 @@ local function insert_ai_commit_message()
   end
 
   -- Gather all context in parallel
-  local context = {
-    branch = nil,
-    recent_commits = nil,
-    diff = nil,
-  }
   local pending = 3
   local failed = false
+  local check_complete
 
-  local function check_complete()
+  local function mark_context_done()
+    context_done = context_done + 1
+    set_stage_status(string.format('Preparing context (%d/%d)', context_done, context_total))
+    if check_complete then
+      check_complete()
+    end
+  end
+
+  check_complete = function()
     pending = pending - 1
     if pending == 0 and not failed then
       -- All context gathered, generate commit message
-      generate_commit_message_async(context.branch, context.recent_commits, context.diff, function(message)
-        finalize(message)
-      end)
+      generate_commit_message_async(
+        context.branch,
+        context.recent_commits,
+        context.diff,
+        function(message, generation_meta)
+          finalize(message, generation_meta)
+        end,
+        function(status)
+          set_stage_status(status)
+        end
+      )
     elseif failed then
       finalize(nil)
     end
@@ -792,24 +896,25 @@ local function insert_ai_commit_message()
   -- Get branch info
   get_current_branch_async(function(branch)
     context.branch = branch
-    check_complete()
+    mark_context_done()
   end)
 
   -- Get recent commits
   get_recent_commits_async(5, function(commits)
     context.recent_commits = commits
-    check_complete()
+    mark_context_done()
   end)
 
   -- Get staged diff
-  get_staged_diff_async(function(diff)
+  get_staged_diff_async(function(diff, diff_meta)
     if not diff then
       failed = true
       finalize(nil)
       return
     end
     context.diff = diff
-    check_complete()
+    context.diff_meta = diff_meta
+    mark_context_done()
   end)
 end
 
