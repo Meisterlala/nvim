@@ -885,11 +885,6 @@ local function insert_ai_commit_message()
 
   state.in_flight_buffers[bufnr] = true
 
-  local previous_modifiable = vim.bo[bufnr].modifiable
-  if previous_modifiable then
-    vim.bo[bufnr].modifiable = false
-  end
-
   local spinner = start_spinner(bufnr)
   local done = false
   local aborted = false
@@ -977,10 +972,6 @@ local function insert_ai_commit_message()
     stop_spinner(bufnr, spinner)
     state.in_flight_buffers[bufnr] = nil
 
-    if vim.api.nvim_buf_is_valid(bufnr) then
-      vim.bo[bufnr].modifiable = previous_modifiable
-    end
-
     log.info(string.format('Aborted AI commit message generation for buffer %d (%s)', bufnr, reason or 'unknown'))
   end
 
@@ -1009,21 +1000,12 @@ local function insert_ai_commit_message()
     http_jobs = {}
     state.in_flight_buffers[bufnr] = nil
 
-    if vim.api.nvim_buf_is_valid(bufnr) then
-      if not vim.bo[bufnr].modifiable then
-        vim.bo[bufnr].modifiable = true
-      end
-    end
-
     if aborted then
       return
     end
 
     if not message then
       log.warn 'No message generated'
-      if vim.api.nvim_buf_is_valid(bufnr) then
-        vim.bo[bufnr].modifiable = previous_modifiable
-      end
       return
     end
 
@@ -1037,7 +1019,6 @@ local function insert_ai_commit_message()
         insert_row = line_count
       end
       vim.api.nvim_buf_set_lines(bufnr, insert_row, insert_row, false, lines)
-      vim.bo[bufnr].modifiable = previous_modifiable
       inserted = true
     end
 
