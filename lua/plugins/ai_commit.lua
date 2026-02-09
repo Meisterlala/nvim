@@ -1,8 +1,6 @@
 --- AI-powered Git commit message generator using GitHub Copilot
 --- @type LazySpec
 
----@diagnostic disable: need-check-nil
-
 -- Configuration - Change these to customize behavior
 local CONFIG = {
   -- Use :AICommitModels to select a model
@@ -73,6 +71,7 @@ local state = {
   oauth_token = nil,
   ns_id = nil,
   log = nil,
+  in_flight_buffers = {},
 }
 
 -- Get preferences file path
@@ -271,7 +270,10 @@ end
 ---@return string
 local function get_comment_char()
   local result = vim.fn.system('git config core.commentChar'):gsub('%s+$', '')
-  return result ~= '' and result or '#'
+  if result == '' or result == 'auto' then
+    return '#'
+  end
+  return result
 end
 
 --- Get current branch name (async with plenary)
@@ -395,13 +397,9 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     headers['Authorization'] = 'Bearer ' .. token
     headers['Content-Type'] = 'application/json'
 
-    log.debug('Using headers: ' .. vim.inspect(headers))
-
     -- Format the full prompt with context
     local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
-
-    -- Debug log the entire prompt being sent to AI
-    log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
+    log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
 
     local request_body = {
       messages = { { role = 'user', content = full_prompt } },
@@ -628,7 +626,34 @@ local function insert_ai_commit_message()
     return
   end
 
+  if state.in_flight_buffers[bufnr] then
+    log.debug('Generation already in progress for buffer ' .. bufnr)
+    return
+  end
+
+  state.in_flight_buffers[bufnr] = true
+
   local timer = start_spinner(bufnr)
+  local done = false
+
+  local function finalize(message)
+    if done then
+      return
+    end
+    done = true
+
+    stop_spinner(bufnr, timer)
+    state.in_flight_buffers[bufnr] = nil
+
+    if not message then
+      log.warn 'No message generated'
+      return
+    end
+
+    local lines = vim.split(message, '\n')
+    vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, lines)
+    log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
+  end
 
   -- Gather all context in parallel
   local context = {
@@ -644,20 +669,10 @@ local function insert_ai_commit_message()
     if pending == 0 and not failed then
       -- All context gathered, generate commit message
       generate_commit_message_async(context.branch, context.recent_commits, context.diff, function(message)
-        stop_spinner(bufnr, timer)
-
-        if not message then
-          log.warn 'No message generated'
-          return
-        end
-
-        local lines = vim.split(message, '\n')
-        vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, lines)
-        log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
-        -- vim.notify('AI commit message generated!', vim.log.levels.INFO)
+        finalize(message)
       end)
     elseif failed then
-      stop_spinner(bufnr, timer)
+      finalize(nil)
     end
   end
 
@@ -677,7 +692,7 @@ local function insert_ai_commit_message()
   get_staged_diff_async(function(diff)
     if not diff then
       failed = true
-      stop_spinner(bufnr, timer)
+      finalize(nil)
       return
     end
     context.diff = diff
