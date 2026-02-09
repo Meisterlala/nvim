@@ -9,7 +9,7 @@ local CONFIG = {
   temperature = 0.3, -- Lower = more focused, higher = more creative
   max_tokens = 1500, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
-  max_diff_chars = 60000, -- Truncate very large diffs before sending to model
+  max_diff_chars = 100000, -- Truncate very large diffs before sending to model
   chat_timeout = 20000, -- Chat completion timeout (ms)
 }
 
@@ -361,45 +361,43 @@ local function get_staged_diff_async(callback)
   log.debug 'Getting staged changes diff'
 
   local Job = require 'plenary.job'
-  Job:new({
-    command = 'git',
-    args = { 'diff', '--cached', '--no-color', '--no-ext-diff' },
-    on_exit = vim.schedule_wrap(function(job, code)
-      if code ~= 0 then
-        log.error 'Failed to get staged changes'
-        callback(nil)
-        return
-      end
-
-      local result = table.concat(job:result(), '\n')
-      if result == '' or result:match '^%s*$' then
-        log.warn 'No staged changes found'
-        callback(nil)
-        return
-      end
-
-      if #result > CONFIG.max_diff_chars then
-        local head_len = math.floor(CONFIG.max_diff_chars * 0.7)
-        local tail_len = CONFIG.max_diff_chars - head_len
-        local tail_start = #result - tail_len + 1
-        if tail_start < 1 then
-          tail_start = 1
+  Job
+    :new({
+      command = 'git',
+      args = { 'diff', '--cached', '--no-color', '--no-ext-diff' },
+      on_exit = vim.schedule_wrap(function(job, code)
+        if code ~= 0 then
+          log.error 'Failed to get staged changes'
+          callback(nil)
+          return
         end
 
-        local marker = string.format(
-          '\n\n[... diff truncated by ai_commit: original=%d chars, kept=%d chars ...]\n\n',
-          #result,
-          CONFIG.max_diff_chars
-        )
-        result = result:sub(1, head_len) .. marker .. result:sub(tail_start)
-        log.warn(string.format('Staged diff exceeded max size, truncated to %d chars', CONFIG.max_diff_chars))
-      end
+        local result = table.concat(job:result(), '\n')
+        if result == '' or result:match '^%s*$' then
+          log.warn 'No staged changes found'
+          callback(nil)
+          return
+        end
 
-      local diff_size = #result
-      log.info(string.format('Got staged diff (%d bytes)', diff_size))
-      callback(result)
-    end),
-  }):start()
+        if #result > CONFIG.max_diff_chars then
+          local head_len = math.floor(CONFIG.max_diff_chars * 0.7)
+          local tail_len = CONFIG.max_diff_chars - head_len
+          local tail_start = #result - tail_len + 1
+          if tail_start < 1 then
+            tail_start = 1
+          end
+
+          local marker = string.format('\n\n[... diff truncated by ai_commit: original=%d chars, kept=%d chars ...]\n\n', #result, CONFIG.max_diff_chars)
+          result = result:sub(1, head_len) .. marker .. result:sub(tail_start)
+          log.warn(string.format('Staged diff exceeded max size, truncated to %d chars', CONFIG.max_diff_chars))
+        end
+
+        local diff_size = #result
+        log.info(string.format('Got staged diff (%d bytes)', diff_size))
+        callback(result)
+      end),
+    })
+    :start()
 end
 
 --- Check if buffer has existing commit message content
