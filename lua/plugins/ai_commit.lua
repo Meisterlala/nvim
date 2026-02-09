@@ -400,6 +400,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     -- Format the full prompt with context
     local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
     log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
+    log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
 
     local request_body = {
       messages = { { role = 'user', content = full_prompt } },
