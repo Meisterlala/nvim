@@ -292,7 +292,7 @@ local function get_current_branch_async(callback)
   }):start()
 end
 
---- Get recent commit messages with full details (async with plenary)
+--- Get recent commit titles (async with plenary)
 ---@param count integer
 ---@param callback function(string)
 local function get_recent_commits_async(count, callback)
@@ -300,56 +300,14 @@ local function get_recent_commits_async(count, callback)
   local Job = require 'plenary.job'
   Job:new({
     command = 'git',
-    args = { 'log', '-n', tostring(count), '--format=Commit %h: %s%n%b%n---END---' },
+    args = { 'log', '-n', tostring(count), '--format=%h %s' },
     on_exit = vim.schedule_wrap(function(job, code)
       if code ~= 0 then
         callback 'No recent commits available'
         return
       end
-      local lines = job:result()
-      local result_lines = {}
-      local in_body = false
-      local body_lines = {}
-      local current_commit_header = nil
-
-      for _, line in ipairs(lines) do
-        if line:match '^Commit %x+:' then
-          -- Start of new commit
-          if current_commit_header and #body_lines == 0 then
-            -- Previous commit had empty body
-            table.insert(result_lines, current_commit_header)
-            table.insert(result_lines, '(empty body)')
-            table.insert(result_lines, '')
-          elseif current_commit_header then
-            -- Previous commit had body
-            table.insert(result_lines, current_commit_header)
-            for _, body_line in ipairs(body_lines) do
-              table.insert(result_lines, body_line)
-            end
-            table.insert(result_lines, '')
-          end
-          current_commit_header = line
-          body_lines = {}
-          in_body = true
-        elseif line == '---END---' then
-          in_body = false
-        elseif in_body and line:match '%S' then
-          table.insert(body_lines, line)
-        end
-      end
-
-      -- Handle last commit
-      if current_commit_header and #body_lines == 0 then
-        table.insert(result_lines, current_commit_header)
-        table.insert(result_lines, '(empty body)')
-      elseif current_commit_header then
-        table.insert(result_lines, current_commit_header)
-        for _, body_line in ipairs(body_lines) do
-          table.insert(result_lines, body_line)
-        end
-      end
-
-      callback(table.concat(result_lines, '\n'))
+      local result = table.concat(job:result(), '\n')
+      callback(result)
     end),
   }):start()
 end
