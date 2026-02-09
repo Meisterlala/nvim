@@ -54,6 +54,12 @@ ADDITIONAL GUIDELINES:
 - BREAKING CHANGE: Use SPARINGLY. ONLY for actual breaking API changes affecting existing users
 - BREAKING CHANGE: Adding new features is NOT breaking. Only for removed/changed functionality.
 
+Current branch: %s
+
+Recent commits:
+%s
+
+
 Staged changes:
 ```
 %s
@@ -127,10 +133,12 @@ local function setup_logger()
     return state.log
   end
 
+  local log_path = vim.fn.stdpath 'cache' .. '/ai-commit.log'
   state.log = plenary_log.new {
     plugin = 'ai-commit',
-    level = 'warn', -- Only log warnings and errors to reduce noise
-    use_console = false, -- Don't output to console
+    level = 'debug',
+    use_console = false,
+    outfile = log_path,
   }
 
   return state.log
@@ -266,28 +274,115 @@ local function get_comment_char()
   return result ~= '' and result or '#'
 end
 
---- Get staged changes diff
----@return string|nil
-local function get_staged_diff()
+--- Get current branch name (async with plenary)
+---@param callback function(string)
+local function get_current_branch_async(callback)
+  local Job = require 'plenary.job'
+  Job:new({
+    command = 'git',
+    args = { 'branch', '--show-current' },
+    on_exit = vim.schedule_wrap(function(job, code)
+      if code ~= 0 then
+        callback 'unknown'
+        return
+      end
+      local result = table.concat(job:result(), '\n'):gsub('%s+$', '')
+      callback(result)
+    end),
+  }):start()
+end
+
+--- Get recent commit messages with full details (async with plenary)
+---@param count integer
+---@param callback function(string)
+local function get_recent_commits_async(count, callback)
+  count = count or 5
+  local Job = require 'plenary.job'
+  Job:new({
+    command = 'git',
+    args = { 'log', '-n', tostring(count), '--format=Commit %h: %s%n%b%n---END---' },
+    on_exit = vim.schedule_wrap(function(job, code)
+      if code ~= 0 then
+        callback 'No recent commits available'
+        return
+      end
+      local lines = job:result()
+      local result_lines = {}
+      local in_body = false
+      local body_lines = {}
+      local current_commit_header = nil
+
+      for _, line in ipairs(lines) do
+        if line:match '^Commit %x+:' then
+          -- Start of new commit
+          if current_commit_header and #body_lines == 0 then
+            -- Previous commit had empty body
+            table.insert(result_lines, current_commit_header)
+            table.insert(result_lines, '(empty body)')
+            table.insert(result_lines, '')
+          elseif current_commit_header then
+            -- Previous commit had body
+            table.insert(result_lines, current_commit_header)
+            for _, body_line in ipairs(body_lines) do
+              table.insert(result_lines, body_line)
+            end
+            table.insert(result_lines, '')
+          end
+          current_commit_header = line
+          body_lines = {}
+          in_body = true
+        elseif line == '---END---' then
+          in_body = false
+        elseif in_body and line:match '%S' then
+          table.insert(body_lines, line)
+        end
+      end
+
+      -- Handle last commit
+      if current_commit_header and #body_lines == 0 then
+        table.insert(result_lines, current_commit_header)
+        table.insert(result_lines, '(empty body)')
+      elseif current_commit_header then
+        table.insert(result_lines, current_commit_header)
+        for _, body_line in ipairs(body_lines) do
+          table.insert(result_lines, body_line)
+        end
+      end
+
+      callback(table.concat(result_lines, '\n'))
+    end),
+  }):start()
+end
+
+--- Get staged changes diff (async with plenary)
+---@param callback function(string|nil)
+local function get_staged_diff_async(callback)
   local log = setup_logger()
   log.debug 'Getting staged changes diff'
 
-  local result = vim.fn.system 'git diff --cached --no-color --no-ext-diff'
+  local Job = require 'plenary.job'
+  Job:new({
+    command = 'git',
+    args = { 'diff', '--cached', '--no-color', '--no-ext-diff' },
+    on_exit = vim.schedule_wrap(function(job, code)
+      if code ~= 0 then
+        log.error 'Failed to get staged changes'
+        callback(nil)
+        return
+      end
 
-  if vim.v.shell_error ~= 0 then
-    log.error 'Failed to get staged changes'
-    -- vim.notify('Failed to get staged changes', vim.log.levels.ERROR)
-    return nil
-  end
+      local result = table.concat(job:result(), '\n')
+      if result == '' or result:match '^%s*$' then
+        log.warn 'No staged changes found'
+        callback(nil)
+        return
+      end
 
-  if result == '' or result:match '^%s*$' then
-    log.warn 'No staged changes found'
-    return nil
-  end
-
-  local diff_size = #result
-  log.info(string.format('Got staged diff (%d bytes)', diff_size))
-  return result
+      local diff_size = #result
+      log.info(string.format('Got staged diff (%d bytes)', diff_size))
+      callback(result)
+    end),
+  }):start()
 end
 
 --- Check if buffer has existing commit message content
@@ -317,9 +412,11 @@ local function clean_message(message)
 end
 
 --- Generate commit message using Copilot (async)
+---@param branch string
+---@param recent_commits string
 ---@param diff string
 ---@param callback function(string|nil)
-local function generate_commit_message_async(diff, callback)
+local function generate_commit_message_async(branch, recent_commits, diff, callback)
   local log = setup_logger()
   log.info 'Starting commit message generation'
 
@@ -342,8 +439,14 @@ local function generate_commit_message_async(diff, callback)
 
     log.debug('Using headers: ' .. vim.inspect(headers))
 
+    -- Format the full prompt with context
+    local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
+
+    -- Debug log the entire prompt being sent to AI
+    log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
+
     local request_body = {
-      messages = { { role = 'user', content = string.format(COMMIT_PROMPT_TEMPLATE, diff) } },
+      messages = { { role = 'user', content = full_prompt } },
       stream = false,
       temperature = CONFIG.temperature,
       max_tokens = CONFIG.max_tokens,
@@ -567,30 +670,66 @@ local function insert_ai_commit_message()
     return
   end
 
-  local diff = get_staged_diff()
-  if not diff then
-    return
-  end
-
   local timer = start_spinner(bufnr)
 
-  generate_commit_message_async(diff, function(message)
-    stop_spinner(bufnr, timer)
+  -- Gather all context in parallel
+  local context = {
+    branch = nil,
+    recent_commits = nil,
+    diff = nil,
+  }
+  local pending = 3
+  local failed = false
 
-    if not message then
-      log.warn 'No message generated'
+  local function check_complete()
+    pending = pending - 1
+    if pending == 0 and not failed then
+      -- All context gathered, generate commit message
+      generate_commit_message_async(context.branch, context.recent_commits, context.diff, function(message)
+        stop_spinner(bufnr, timer)
+
+        if not message then
+          log.warn 'No message generated'
+          return
+        end
+
+        local lines = vim.split(message, '\n')
+        vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, lines)
+        log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
+        -- vim.notify('AI commit message generated!', vim.log.levels.INFO)
+      end)
+    elseif failed then
+      stop_spinner(bufnr, timer)
+    end
+  end
+
+  -- Get branch info
+  get_current_branch_async(function(branch)
+    context.branch = branch
+    check_complete()
+  end)
+
+  -- Get recent commits
+  get_recent_commits_async(5, function(commits)
+    context.recent_commits = commits
+    check_complete()
+  end)
+
+  -- Get staged diff
+  get_staged_diff_async(function(diff)
+    if not diff then
+      failed = true
+      stop_spinner(bufnr, timer)
       return
     end
-
-    local lines = vim.split(message, '\n')
-    vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, lines)
-    log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
-    -- vim.notify('AI commit message generated!', vim.log.levels.INFO)
+    context.diff = diff
+    check_complete()
   end)
 end
 
 -- Plugin Setup
 
+--- @return LazySpec
 return {
   'nvim-lua/plenary.nvim',
   ft = 'gitcommit',
@@ -600,7 +739,6 @@ return {
     load_preferences()
 
     local log = setup_logger()
-    log.info 'AI Commit plugin initialized'
     log.info('Using model: ' .. (CONFIG.model or 'auto'))
 
     state.ns_id = vim.api.nvim_create_namespace 'ai_commit_spinner'
