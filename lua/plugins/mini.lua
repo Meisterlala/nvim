@@ -57,12 +57,13 @@ vim.api.nvim_create_autocmd('BufDelete', {
 --- Returns filetype icon, name and size
 local function my_fileinfo()
   local filetype = vim.bo.filetype
+  local filetype_label = filetype ~= '' and filetype or 'text'
   -- Get filetype icon from nvim-web-devicons
   local devicons_ok, devicons = pcall(require, 'nvim-web-devicons')
   local ft_icon = ''
   if devicons_ok and filetype ~= '' then
-    local icon, _ = devicons.get_icon_by_filetype(filetype, { default = true })
-    if icon then
+    local ok_icon, icon = pcall(devicons.get_icon_by_filetype, filetype, { default = true })
+    if ok_icon and icon then
       ft_icon = icon .. ' '
     end
   end
@@ -71,10 +72,11 @@ local function my_fileinfo()
   if ft_icon == '' then
     local ts_ok, parsers = pcall(require, 'nvim-treesitter.parsers')
     if ts_ok then
-      local lang = parsers.get_buf_lang(0) or ''
+      local ok_lang, lang = pcall(parsers.get_buf_lang, 0)
+      lang = (ok_lang and lang) or ''
       if lang ~= '' and devicons_ok then
-        local icon, _ = devicons.get_icon_by_filetype(lang, { default = true })
-        if icon then
+        local ok_icon, icon = pcall(devicons.get_icon_by_filetype, lang, { default = true })
+        if ok_icon and icon then
           ft_icon = icon .. ' '
         end
       end
@@ -93,7 +95,7 @@ local function my_fileinfo()
     sizeOut = string.format('%.1fM', size / (1024 * 1024))
   end
 
-  return string.format('%s%s %s', ft_icon, filetype, sizeOut)
+  return string.format('%s%s %s', ft_icon, filetype_label, sizeOut)
 end
 
 --- @type LazySpec | LazySpec[]
