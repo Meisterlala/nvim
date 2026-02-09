@@ -38,11 +38,11 @@ return {
         -- "ascii"   is the graph the git CLI generates
         -- "unicode" is the graph like https://github.com/rbong/vim-flog
         -- "kitty"   is the graph like https://github.com/isakbm/gitgraph.nvim - use https://github.com/rbong/flog-symbols if you don't use Kitty
-        graph_style = 'unicode',
+        graph_style = 'kitty',
         -- Change the default way of opening neogit
         kind = 'split_below',
         -- Show message with spinning animation when a git command is running.
-        process_spinner = true,
+        process_spinner = false,
         -- Used to generate URL's for branch popup action "pull request".
         -- Allows a different telescope sorter. Defaults to 'fuzzy_with_index_bias'. The example below will use the native fzf
         -- sorter instead. By default, this function returns `nil`.
@@ -50,6 +50,9 @@ return {
         --   return require('telescope').extensions.fzf.native_fzf_sorter()
         -- end,
         -- Neogit refreshes its internal state after specific events, which can be expensive depending on the repository size.
+        --
+        -- The time after which an output console is shown for slow running commands
+        console_timeout = 5000,
         -- Disabling `auto_refresh` will make it so you have to manually refresh the status after you open it.
         auto_refresh = true,
 
@@ -67,7 +70,7 @@ return {
           -- If enabled, uses fzf-lua for menu selection. If the telescope integration
           -- is also selected then telescope is used instead
           -- Requires you to have `ibhagwan/fzf-lua` installed.
-          fzf_lua = false,
+          fzf_lua = true,
 
           -- If enabled, uses mini.pick for menu selection. If the telescope integration
           -- is also selected then telescope is used instead
