@@ -13,6 +13,8 @@ local CONFIG = {
   max_diff_chars = 100000, -- Truncate very large diffs before sending to model
   chat_timeout = 30000, -- Chat completion timeout (ms)
   model_highlight_group = 'Special', -- Highlight group for model name in spinner status
+
+  log_level = 'warn',
 }
 
 -- Constants
@@ -147,7 +149,7 @@ local function setup_logger()
 
   state.log = plenary_log.new {
     plugin = 'ai-commit',
-    level = 'debug',
+    level = CONFIG.log_level or 'info',
     use_console = false,
   }
 
