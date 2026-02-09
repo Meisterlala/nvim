@@ -1,5 +1,4 @@
 --- AI-powered Git commit message generator using GitHub Copilot
---- @type LazySpec
 
 -- Configuration - Change these to customize behavior
 local CONFIG = {
