@@ -5,12 +5,14 @@
 local CONFIG = {
   -- Use :AICommitModels to select a model
   model = nil, -- nil = auto (use Copilot's default)
+  model_name = nil, -- Friendly display name for selected model
 
   temperature = 0.3, -- Lower = more focused, higher = more creative
   max_tokens = 1500, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
   max_diff_chars = 100000, -- Truncate very large diffs before sending to model
   chat_timeout = 20000, -- Chat completion timeout (ms)
+  model_highlight_group = 'Special', -- Highlight group for model name in spinner status
 }
 
 -- Constants
@@ -97,8 +99,13 @@ local function load_preferences()
     local content = file:read '*a'
     file:close()
     local ok, prefs = pcall(vim.json.decode, content)
-    if ok and prefs and prefs.model ~= nil then
+    if ok and type(prefs) == 'table' then
       CONFIG.model = prefs.model
+      if type(prefs.model_name) == 'string' and prefs.model_name ~= '' then
+        CONFIG.model_name = prefs.model_name
+      else
+        CONFIG.model_name = nil
+      end
     end
   end
 end
@@ -110,7 +117,10 @@ local function save_preferences()
     return false
   end
 
-  local prefs = { model = CONFIG.model }
+  local prefs = {
+    model = CONFIG.model,
+    model_name = CONFIG.model_name,
+  }
   local file = io.open(prefs_file, 'w')
   if file then
     file:write(vim.json.encode(prefs))
@@ -135,12 +145,10 @@ local function setup_logger()
     return state.log
   end
 
-  local log_path = vim.fn.stdpath 'cache' .. '/ai-commit.log'
   state.log = plenary_log.new {
     plugin = 'ai-commit',
     level = 'debug',
     use_console = false,
-    outfile = log_path,
   }
 
   return state.log
@@ -169,20 +177,15 @@ local function format_body_for_log(body, max_len)
   return compact:sub(1, limit) .. '...'
 end
 
----@param count integer
 ---@return string
-local function format_count_short(count)
-  if count >= 1000000 then
-    local value = string.format('%.1fm', count / 1000000)
-    return value:gsub('%.0m$', 'm')
+local function get_selected_model_name()
+  if type(CONFIG.model_name) == 'string' and CONFIG.model_name ~= '' then
+    return CONFIG.model_name
   end
-
-  if count >= 1000 then
-    local value = string.format('%.1fk', count / 1000)
-    return value:gsub('%.0k$', 'k')
+  if type(CONFIG.model) == 'string' and CONFIG.model ~= '' then
+    return CONFIG.model
   end
-
-  return tostring(count)
+  return 'Copilot default'
 end
 
 -- Try to get headers from Avante's copilot provider (so we don't maintain them)
@@ -263,12 +266,26 @@ end
 
 --- Exchange OAuth token for Copilot API token (async)
 ---@param callback function(string|nil)
-local function get_api_token_async(callback)
+---@param request_context table|nil
+local function get_api_token_async(callback, request_context)
   local log = setup_logger()
+
+  local function is_cancelled()
+    return request_context and request_context.is_cancelled and request_context.is_cancelled()
+  end
+
+  local function register_http_job(job)
+    if request_context and request_context.register_http_job then
+      request_context.register_http_job(job)
+    end
+  end
 
   -- Return cached token if still valid
   if state.copilot_token and state.copilot_token.expires_at > os.time() then
     log.debug 'Using cached API token'
+    if is_cancelled() then
+      return
+    end
     callback(state.copilot_token.token)
     return
   end
@@ -282,13 +299,18 @@ local function get_api_token_async(callback)
   log.info 'Exchanging OAuth token for API token'
   local curl = require 'plenary.curl'
 
-  curl.get(COPILOT_AUTH_URL, {
+  local job = curl.get(COPILOT_AUTH_URL, {
     headers = {
       ['Authorization'] = 'token ' .. oauth_token,
       ['Accept'] = 'application/json',
     },
     timeout = 5000,
     callback = vim.schedule_wrap(function(response)
+      if is_cancelled() then
+        log.debug 'Ignoring Copilot auth response for cancelled request'
+        return
+      end
+
       if response.status ~= 200 then
         local response_body = format_body_for_log(response.body)
         log.error(string.format('Failed to authenticate with Copilot: %d body=%s', response.status, response_body))
@@ -317,7 +339,20 @@ local function get_api_token_async(callback)
       log.info(string.format('API token acquired (expires in %ds)', expires_in))
       callback(state.copilot_token.token)
     end),
+    on_error = vim.schedule_wrap(function(err)
+      if is_cancelled() then
+        log.debug 'Copilot auth request cancelled'
+        return
+      end
+
+      local stderr = err and err.stderr or '<no stderr>'
+      log.error('Copilot auth request failed: ' .. tostring(stderr))
+      vim.notify('Copilot authentication request failed. See ai-commit logs.', vim.log.levels.ERROR)
+      callback(nil)
+    end),
   })
+
+  register_http_job(job)
 end
 
 -- Git Operations
@@ -456,9 +491,20 @@ end
 ---@param diff string
 ---@param callback function(string|nil, table|nil)
 ---@param status_callback function(string)|nil
-local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback)
+---@param request_context table|nil
+local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback, request_context)
   local log = setup_logger()
   log.info 'Starting commit message generation'
+
+  local function is_cancelled()
+    return request_context and request_context.is_cancelled and request_context.is_cancelled()
+  end
+
+  local function register_http_job(job)
+    if request_context and request_context.register_http_job then
+      request_context.register_http_job(job)
+    end
+  end
 
   local function report_status(message)
     if status_callback then
@@ -466,11 +512,16 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     end
   end
 
-  local requested_model = CONFIG.model or 'auto'
+  local requested_model = get_selected_model_name()
 
-  report_status('Authenticating with Copilot')
+  report_status 'Authenticating with Copilot'
 
   get_api_token_async(function(token)
+    if is_cancelled() then
+      log.debug 'Generation cancelled before API token usage'
+      return
+    end
+
     if not token then
       log.error 'Failed to get API token'
       vim.notify('Could not get Copilot API token. See ai-commit logs.', vim.log.levels.ERROR)
@@ -489,7 +540,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     headers['Content-Type'] = 'application/json'
 
     -- Format the full prompt with context
-    report_status('Preparing prompt')
+    report_status 'Preparing prompt'
     local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
     log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
     log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
@@ -506,13 +557,18 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
       request_body.model = CONFIG.model
     end
 
-    report_status('Waiting for Copilot response')
+    report_status('Waiting for response from ' .. requested_model)
 
-    curl.post(endpoint .. '/chat/completions', {
+    local job = curl.post(endpoint .. '/chat/completions', {
       headers = headers,
       body = vim.json.encode(request_body),
       timeout = CONFIG.chat_timeout,
       callback = vim.schedule_wrap(function(response)
+        if is_cancelled() then
+          log.debug 'Ignoring Copilot chat response for cancelled request'
+          return
+        end
+
         local elapsed_ms = (vim.uv.hrtime() - start_time) / 1e6
 
         if response.status ~= 200 then
@@ -536,8 +592,21 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
         log.info(string.format('Generated commit message (took %.0fms, model=%s): %s', elapsed_ms, used_model, message:sub(1, 50) .. '...'))
         callback(message, { requested_model = requested_model, used_model = used_model })
       end),
+      on_error = vim.schedule_wrap(function(err)
+        if is_cancelled() then
+          log.debug 'Copilot chat request cancelled'
+          return
+        end
+
+        local stderr = err and err.stderr or '<no stderr>'
+        log.error('Copilot chat request failed: ' .. tostring(stderr))
+        vim.notify('Copilot API request failed. See ai-commit logs.', vim.log.levels.ERROR)
+        callback(nil, nil)
+      end),
     })
-  end)
+
+    register_http_job(job)
+  end, request_context)
 end
 
 --- Get available Copilot models
@@ -645,8 +714,13 @@ local function select_model()
 
     -- Update runtime config
     CONFIG.model = choice.id
+    CONFIG.model_name = choice.display_name or choice.name or choice.id
+    if not CONFIG.model then
+      CONFIG.model_name = nil
+    end
+
     local log = setup_logger()
-    log.info('Model changed to: ' .. (choice.id or 'auto'))
+    log.info('Model changed to: ' .. get_selected_model_name())
 
     -- Save to preferences file (NOT the config file!)
     save_preferences()
@@ -667,17 +741,41 @@ local function start_spinner(bufnr)
   local log = setup_logger()
   log.debug('Starting spinner for buffer ' .. bufnr)
 
+  local function stop_timer_safe(spinner)
+    local timer = spinner and spinner.timer
+    if not timer then
+      return
+    end
+
+    spinner.timer = nil
+
+    pcall(function()
+      if timer.stop then
+        timer:stop()
+      end
+    end)
+
+    pcall(function()
+      if timer.close then
+        timer:close()
+      end
+    end)
+  end
+
   local spinner = {
     timer = nil,
     extmark_id = nil,
     status_text = 'Preparing commit message',
+    status_chunks = { { 'Preparing commit message', 'Comment' } },
+    stop_timer = stop_timer_safe,
   }
 
   local frame_idx = 1
 
   local function update_spinner()
     if not vim.api.nvim_buf_is_valid(bufnr) then
-      log.debug 'Buffer no longer valid, stopping spinner'
+      log.debug 'Buffer no longer valid, stopping spinner timer'
+      stop_timer_safe(spinner)
       return
     end
 
@@ -689,10 +787,17 @@ local function start_spinner(bufnr)
       end
     end
 
+    local virt_text = { { SPINNER_FRAMES[frame_idx] .. ' ', 'Comment' } }
+    if spinner.status_chunks and #spinner.status_chunks > 0 then
+      vim.list_extend(virt_text, spinner.status_chunks)
+    else
+      table.insert(virt_text, { spinner.status_text, 'Comment' })
+    end
+
     spinner.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, {
       id = spinner.extmark_id,
       right_gravity = false,
-      virt_text = { { string.format('%s %s', SPINNER_FRAMES[frame_idx], spinner.status_text), 'Comment' } },
+      virt_text = virt_text,
       virt_text_pos = 'eol',
     })
 
@@ -712,12 +817,14 @@ end
 
 ---@param spinner table|nil
 ---@param status_text string
-local function set_spinner_status(spinner, status_text)
+---@param status_chunks table|nil
+local function set_spinner_status(spinner, status_text, status_chunks)
   if not spinner then
     return
   end
 
   spinner.status_text = status_text
+  spinner.status_chunks = status_chunks
   if spinner.update then
     spinner.update()
   end
@@ -733,9 +840,8 @@ local function stop_spinner(bufnr, spinner)
 
   local insert_row = 0
 
-  if spinner and spinner.timer and spinner.timer.stop then
-    spinner.timer:stop()
-    spinner.timer:close()
+  if spinner and spinner.stop_timer then
+    spinner.stop_timer(spinner)
   end
 
   if vim.api.nvim_buf_is_valid(bufnr) and spinner and spinner.extmark_id then
@@ -786,56 +892,131 @@ local function insert_ai_commit_message()
 
   local spinner = start_spinner(bufnr)
   local done = false
+  local aborted = false
+  local http_jobs = {}
   local context_total = 3
   local context_done = 0
+  local last_status_line = nil
+
+  local function register_http_job(job)
+    if not job then
+      return
+    end
+    table.insert(http_jobs, job)
+  end
+
+  local function abort_http_jobs()
+    for _, job in ipairs(http_jobs) do
+      if job and job.shutdown and not job.is_shutdown then
+        pcall(job.shutdown, job, 0, 15)
+      end
+    end
+    http_jobs = {}
+  end
+
+  local request_context = {
+    is_cancelled = function()
+      return done or aborted
+    end,
+    register_http_job = register_http_job,
+  }
 
   local context = {
     branch = nil,
     recent_commits = nil,
     diff = nil,
     diff_meta = nil,
-    model_requested = CONFIG.model or 'auto',
   }
 
-  local function spinner_stats_text()
-    local parts = { 'model:' .. context.model_requested }
-    if context.diff_meta then
-      if context.diff_meta.truncated then
-        table.insert(
-          parts,
-          string.format('diff:%s/%s trunc', format_count_short(context.diff_meta.sent_chars), format_count_short(context.diff_meta.original_chars))
-        )
-      else
-        table.insert(parts, 'diff:' .. format_count_short(context.diff_meta.sent_chars))
-      end
+  local function spinner_suffix_text()
+    if context.diff_meta and context.diff_meta.truncated then
+      return ' [truncated]'
     end
-    return table.concat(parts, ' | ')
+    return ''
   end
 
   local function set_stage_status(stage_text)
-    set_spinner_status(spinner, stage_text .. ' | ' .. spinner_stats_text())
+    if done then
+      return
+    end
+
+    local status_line = stage_text .. spinner_suffix_text()
+
+    local status_chunks = { { status_line, 'Comment' } }
+    local waiting_prefix = 'Waiting for response from '
+    if vim.startswith(stage_text, waiting_prefix) then
+      local model_name = stage_text:sub(#waiting_prefix + 1)
+      status_chunks = {
+        { waiting_prefix, 'Comment' },
+        { model_name, CONFIG.model_highlight_group },
+      }
+      local suffix = spinner_suffix_text()
+      if suffix ~= '' then
+        table.insert(status_chunks, { suffix, 'Comment' })
+      end
+    end
+
+    set_spinner_status(spinner, status_line, status_chunks)
+
+    if status_line ~= last_status_line then
+      last_status_line = status_line
+      log.debug('Status: ' .. status_line)
+    end
   end
 
   set_stage_status(string.format('Preparing context (%d/%d)', context_done, context_total))
 
-  local function finalize(message, generation_meta)
+  local function abort_generation(reason)
     if done then
       return
     end
-    done = true
 
-    if message then
-      local model_used = (generation_meta and generation_meta.used_model) or context.model_requested
-      set_stage_status('Inserting message (model: ' .. model_used .. ')')
+    done = true
+    aborted = true
+    abort_http_jobs()
+    stop_spinner(bufnr, spinner)
+    state.in_flight_buffers[bufnr] = nil
+
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.bo[bufnr].modifiable = previous_modifiable
     end
 
+    log.info(string.format('Aborted AI commit message generation for buffer %d (%s)', bufnr, reason or 'unknown'))
+  end
+
+  vim.api.nvim_create_autocmd({ 'BufHidden', 'BufUnload', 'BufWipeout' }, {
+    buffer = bufnr,
+    once = true,
+    callback = function()
+      abort_generation 'buffer closed'
+    end,
+  })
+
+  local function finalize(message)
+    if done then
+      return
+    end
+
+    if message then
+      set_stage_status 'Inserting message'
+    else
+      set_stage_status 'Generation failed'
+    end
+
+    done = true
+
     local insert_row = stop_spinner(bufnr, spinner)
+    http_jobs = {}
     state.in_flight_buffers[bufnr] = nil
 
     if vim.api.nvim_buf_is_valid(bufnr) then
       if not vim.bo[bufnr].modifiable then
         vim.bo[bufnr].modifiable = true
       end
+    end
+
+    if aborted then
+      return
     end
 
     if not message then
@@ -847,6 +1028,7 @@ local function insert_ai_commit_message()
     end
 
     local lines = vim.split(message, '\n')
+    local inserted = false
     if vim.api.nvim_buf_is_valid(bufnr) then
       local line_count = vim.api.nvim_buf_line_count(bufnr)
       if insert_row < 0 then
@@ -856,8 +1038,14 @@ local function insert_ai_commit_message()
       end
       vim.api.nvim_buf_set_lines(bufnr, insert_row, insert_row, false, lines)
       vim.bo[bufnr].modifiable = previous_modifiable
+      inserted = true
     end
-    log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
+
+    if inserted then
+      log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
+    else
+      log.info('Generated commit message but skipped insert because buffer is no longer available')
+    end
   end
 
   -- Gather all context in parallel
@@ -866,6 +1054,10 @@ local function insert_ai_commit_message()
   local check_complete
 
   local function mark_context_done()
+    if done then
+      return
+    end
+
     context_done = context_done + 1
     set_stage_status(string.format('Preparing context (%d/%d)', context_done, context_total))
     if check_complete then
@@ -874,20 +1066,18 @@ local function insert_ai_commit_message()
   end
 
   check_complete = function()
+    if done then
+      return
+    end
+
     pending = pending - 1
     if pending == 0 and not failed then
       -- All context gathered, generate commit message
-      generate_commit_message_async(
-        context.branch,
-        context.recent_commits,
-        context.diff,
-        function(message, generation_meta)
-          finalize(message, generation_meta)
-        end,
-        function(status)
-          set_stage_status(status)
-        end
-      )
+      generate_commit_message_async(context.branch, context.recent_commits, context.diff, function(message)
+        finalize(message)
+      end, function(status)
+        set_stage_status(status)
+      end, request_context)
     elseif failed then
       finalize(nil)
     end
@@ -895,18 +1085,30 @@ local function insert_ai_commit_message()
 
   -- Get branch info
   get_current_branch_async(function(branch)
+    if done then
+      return
+    end
+
     context.branch = branch
     mark_context_done()
   end)
 
   -- Get recent commits
   get_recent_commits_async(5, function(commits)
+    if done then
+      return
+    end
+
     context.recent_commits = commits
     mark_context_done()
   end)
 
   -- Get staged diff
   get_staged_diff_async(function(diff, diff_meta)
+    if done then
+      return
+    end
+
     if not diff then
       failed = true
       finalize(nil)
@@ -930,7 +1132,7 @@ return {
     load_preferences()
 
     local log = setup_logger()
-    log.info('Using model: ' .. (CONFIG.model or 'auto'))
+    log.info('Using model: ' .. get_selected_model_name())
 
     state.ns_id = vim.api.nvim_create_namespace 'ai_commit_spinner'
 
