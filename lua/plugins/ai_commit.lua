@@ -658,8 +658,8 @@ local function select_model()
 
     local is_disabled = false
     if model.policy and type(model.policy) == 'table' then
-      local state = model.policy.state
-      if state == 'disabled' or state == 'unconfigured' then
+      local s = model.policy.state
+      if s == 'disabled' or s == 'unconfigured' then
         is_disabled = true
       end
     elseif model.policy == false then
