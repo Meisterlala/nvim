@@ -9,6 +9,8 @@ local CONFIG = {
   temperature = 0.3, -- Lower = more focused, higher = more creative
   max_tokens = 1500, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
+  max_diff_chars = 60000, -- Truncate very large diffs before sending to model
+  chat_timeout = 20000, -- Chat completion timeout (ms)
 }
 
 -- Constants
@@ -45,6 +47,7 @@ SPECIFICATION (https://www.conventionalcommits.org/en/v1.0.0/):
 ADDITIONAL GUIDELINES:
 - Description: Use lowercase, imperative mood, no ending period, max 50 chars
 - Body: ONLY include if changes require explanation beyond description. Keep concise.
+- Body: ONLY inlcude a body, if its a non-trivial change that requires additional context.
 - Body: Wrap at 72 characters per line, explain WHAT and WHY (not HOW)
 - Type casing: Any casing may be used, but be consistent (prefer lowercase)
 - SemVer relationship: fix = PATCH, feat = MINOR, BREAKING CHANGE = MAJOR
@@ -144,6 +147,27 @@ local function setup_logger()
 end
 
 -- Authentication
+
+---@param body string|nil
+---@param max_len integer|nil
+---@return string
+local function format_body_for_log(body, max_len)
+  if type(body) ~= 'string' then
+    return '<no body>'
+  end
+
+  local compact = body:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+  if compact == '' then
+    return '<empty body>'
+  end
+
+  local limit = max_len or 300
+  if #compact <= limit then
+    return compact
+  end
+
+  return compact:sub(1, limit) .. '...'
+end
 
 -- Try to get headers from Avante's copilot provider (so we don't maintain them)
 local function get_copilot_headers()
@@ -250,13 +274,29 @@ local function get_api_token_async(callback)
     timeout = 5000,
     callback = vim.schedule_wrap(function(response)
       if response.status ~= 200 then
-        log.error('Failed to authenticate with Copilot: ' .. response.status)
-        -- vim.notify('Failed to authenticate with Copilot: ' .. response.status, vim.log.levels.ERROR)
+        local response_body = format_body_for_log(response.body)
+        log.error(string.format('Failed to authenticate with Copilot: %d body=%s', response.status, response_body))
+        vim.notify('Copilot authentication failed (' .. response.status .. '). See ai-commit logs for response body.', vim.log.levels.ERROR)
         callback(nil)
         return
       end
 
-      state.copilot_token = vim.json.decode(response.body)
+      local ok, decoded = pcall(vim.json.decode, response.body)
+      if not ok or type(decoded) ~= 'table' then
+        log.error('Failed to parse Copilot auth response body=' .. format_body_for_log(response.body))
+        vim.notify('Failed to parse Copilot authentication response. See ai-commit logs.', vim.log.levels.ERROR)
+        callback(nil)
+        return
+      end
+
+      if not decoded.token or not decoded.expires_at then
+        log.error('Copilot auth response missing required fields body=' .. format_body_for_log(response.body))
+        vim.notify('Copilot authentication response was incomplete. See ai-commit logs.', vim.log.levels.ERROR)
+        callback(nil)
+        return
+      end
+
+      state.copilot_token = decoded
       local expires_in = state.copilot_token.expires_at - os.time()
       log.info(string.format('API token acquired (expires in %ds)', expires_in))
       callback(state.copilot_token.token)
@@ -338,6 +378,23 @@ local function get_staged_diff_async(callback)
         return
       end
 
+      if #result > CONFIG.max_diff_chars then
+        local head_len = math.floor(CONFIG.max_diff_chars * 0.7)
+        local tail_len = CONFIG.max_diff_chars - head_len
+        local tail_start = #result - tail_len + 1
+        if tail_start < 1 then
+          tail_start = 1
+        end
+
+        local marker = string.format(
+          '\n\n[... diff truncated by ai_commit: original=%d chars, kept=%d chars ...]\n\n',
+          #result,
+          CONFIG.max_diff_chars
+        )
+        result = result:sub(1, head_len) .. marker .. result:sub(tail_start)
+        log.warn(string.format('Staged diff exceeded max size, truncated to %d chars', CONFIG.max_diff_chars))
+      end
+
       local diff_size = #result
       log.info(string.format('Got staged diff (%d bytes)', diff_size))
       callback(result)
@@ -383,6 +440,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
   get_api_token_async(function(token)
     if not token then
       log.error 'Failed to get API token'
+      vim.notify('Could not get Copilot API token. See ai-commit logs.', vim.log.levels.ERROR)
       callback(nil)
       return
     end
@@ -417,18 +475,22 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     curl.post(endpoint .. '/chat/completions', {
       headers = headers,
       body = vim.json.encode(request_body),
+      timeout = CONFIG.chat_timeout,
       callback = vim.schedule_wrap(function(response)
         local elapsed_ms = (vim.uv.hrtime() - start_time) / 1e6
 
         if response.status ~= 200 then
-          log.error(string.format('Copilot API error: %d (took %.0fms)', response.status, elapsed_ms))
+          local response_body = format_body_for_log(response.body)
+          log.error(string.format('Copilot API error: %d (took %.0fms) body=%s', response.status, elapsed_ms, response_body))
+          vim.notify('Copilot API request failed (' .. response.status .. '). See ai-commit logs for response body.', vim.log.levels.ERROR)
           callback(nil)
           return
         end
 
         local ok, data = pcall(vim.json.decode, response.body)
         if not ok or not data.choices or not data.choices[1] or not data.choices[1].message then
-          log.error 'Failed to parse Copilot response'
+          log.error('Failed to parse Copilot response body=' .. format_body_for_log(response.body))
+          vim.notify('Failed to parse Copilot response. See ai-commit logs for response body.', vim.log.levels.ERROR)
           callback(nil)
           return
         end
@@ -563,12 +625,13 @@ end
 
 --- Create and start spinner animation
 ---@param bufnr integer
----@return any timer
+---@return table spinner
 local function start_spinner(bufnr)
   local log = setup_logger()
   log.debug('Starting spinner for buffer ' .. bufnr)
 
   local frame_idx = 1
+  local extmark_id = nil
 
   local function update_spinner()
     if not vim.api.nvim_buf_is_valid(bufnr) then
@@ -576,8 +639,17 @@ local function start_spinner(bufnr)
       return
     end
 
-    vim.api.nvim_buf_clear_namespace(bufnr, state.ns_id, 0, -1)
-    vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, 0, 0, {
+    local row, col = 0, 0
+    if extmark_id then
+      local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, state.ns_id, extmark_id, {})
+      if pos and #pos >= 2 then
+        row, col = pos[1], pos[2]
+      end
+    end
+
+    extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, {
+      id = extmark_id,
+      right_gravity = false,
       virt_text = { { string.format('%s Generating commit message...', SPINNER_FRAMES[frame_idx]), 'Comment' } },
       virt_text_pos = 'eol',
     })
@@ -591,21 +663,40 @@ local function start_spinner(bufnr)
     timer:start(CONFIG.spinner_interval, CONFIG.spinner_interval, vim.schedule_wrap(update_spinner))
   end
 
-  return timer
+  return {
+    timer = timer,
+    extmark_id = extmark_id,
+  }
 end
 
 --- Stop spinner and clear virtual text
 ---@param bufnr integer
----@param timer any
-local function stop_spinner(bufnr, timer)
+---@param spinner table
+---@return integer insert_row
+local function stop_spinner(bufnr, spinner)
   local log = setup_logger()
   log.debug('Stopping spinner for buffer ' .. bufnr)
 
-  if timer and timer.stop then
-    timer:stop()
-    timer:close()
+  local insert_row = 0
+
+  if spinner and spinner.timer and spinner.timer.stop then
+    spinner.timer:stop()
+    spinner.timer:close()
   end
-  vim.api.nvim_buf_clear_namespace(bufnr, state.ns_id, 0, -1)
+
+  if vim.api.nvim_buf_is_valid(bufnr) and spinner and spinner.extmark_id then
+    local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, state.ns_id, spinner.extmark_id, {})
+    if pos and #pos >= 1 then
+      insert_row = pos[1]
+    end
+    vim.api.nvim_buf_del_extmark(bufnr, state.ns_id, spinner.extmark_id)
+  end
+
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_buf_clear_namespace(bufnr, state.ns_id, 0, -1)
+  end
+
+  return insert_row
 end
 
 -- Main Logic
@@ -634,7 +725,12 @@ local function insert_ai_commit_message()
 
   state.in_flight_buffers[bufnr] = true
 
-  local timer = start_spinner(bufnr)
+  local previous_modifiable = vim.bo[bufnr].modifiable
+  if previous_modifiable then
+    vim.bo[bufnr].modifiable = false
+  end
+
+  local spinner = start_spinner(bufnr)
   local done = false
 
   local function finalize(message)
@@ -643,16 +739,34 @@ local function insert_ai_commit_message()
     end
     done = true
 
-    stop_spinner(bufnr, timer)
+    local insert_row = stop_spinner(bufnr, spinner)
     state.in_flight_buffers[bufnr] = nil
+
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      if not vim.bo[bufnr].modifiable then
+        vim.bo[bufnr].modifiable = true
+      end
+    end
 
     if not message then
       log.warn 'No message generated'
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        vim.bo[bufnr].modifiable = previous_modifiable
+      end
       return
     end
 
     local lines = vim.split(message, '\n')
-    vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, lines)
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      local line_count = vim.api.nvim_buf_line_count(bufnr)
+      if insert_row < 0 then
+        insert_row = 0
+      elseif insert_row > line_count then
+        insert_row = line_count
+      end
+      vim.api.nvim_buf_set_lines(bufnr, insert_row, insert_row, false, lines)
+      vim.bo[bufnr].modifiable = previous_modifiable
+    end
     log.info('Successfully inserted commit message (' .. #lines .. ' lines)')
   end
 
