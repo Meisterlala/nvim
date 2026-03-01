@@ -10,6 +10,11 @@
 
 local M = {}
 
+-- Hardcoded OpenRouter user presets
+M.OPENROUTER_PRESETS = {
+  '@preset/fast',
+}
+
 --- Load models from cache synchronously
 --- @param provider_name string Name of the provider
 --- @param cache_ttl number? Cache TTL in seconds (default: 24 hours)
@@ -197,7 +202,7 @@ function M.inject_into_avante(provider_name, models)
   end)
 end
 
---- Convenience function for OpenRouter
+--- Fetch OpenRouter models and presets
 --- @param cb fun(models: string[]?)
 function M.fetch_openrouter_models(cb)
   M.fetch_models('openrouter', {
@@ -219,6 +224,20 @@ function M.fetch_openrouter_models(cb)
       for _, m in ipairs(body.data) do
         table.insert(models, m.id)
       end
+
+      for _, p in ipairs(M.OPENROUTER_PRESETS) do
+        local exists = false
+        for _, m in ipairs(models) do
+          if m == p then
+            exists = true
+            break
+          end
+        end
+        if not exists then
+          table.insert(models, p)
+        end
+      end
+
       return models
     end,
   }, function(models)

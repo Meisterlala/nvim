@@ -2,9 +2,19 @@
 
 -- Configuration - Change these to customize behavior
 local CONFIG = {
+  -- Provider can be 'copilot' or 'openrouter'
+  provider = 'copilot',
+
   -- Use :AICommitModels to select a model
   model = nil, -- nil = auto (use Copilot's default)
   model_name = nil, -- Friendly display name for selected model
+
+  openrouter = {
+    endpoint = 'https://openrouter.ai/api/v1',
+    -- API key is checked in the following environment variables:
+    -- 1. AVANTE_OPENROUTER_API_KEY
+    -- 2. OPENROUTER_API_KEY
+  },
 
   temperature = 0.3, -- Lower = more focused, higher = more creative
   max_tokens = 1000, -- Max length of generated message
@@ -13,7 +23,7 @@ local CONFIG = {
   chat_timeout = 30000, -- Chat completion timeout (ms)
   model_highlight_group = 'Special', -- Highlight group for model name in spinner status
 
-  log_level = 'warn',
+  log_level = 'info',
 }
 
 -- Constants
@@ -101,6 +111,7 @@ local function load_preferences()
     file:close()
     local ok, prefs = pcall(vim.json.decode, content)
     if ok and type(prefs) == 'table' then
+      CONFIG.provider = prefs.provider or 'copilot'
       CONFIG.model = prefs.model
       if type(prefs.model_name) == 'string' and prefs.model_name ~= '' then
         CONFIG.model_name = prefs.model_name
@@ -119,6 +130,7 @@ local function save_preferences()
   end
 
   local prefs = {
+    provider = CONFIG.provider,
     model = CONFIG.model,
     model_name = CONFIG.model_name,
   }
@@ -180,13 +192,24 @@ end
 
 ---@return string
 local function get_selected_model_name()
+  local provider_prefix = ''
+  if CONFIG.provider == 'openrouter' then
+    provider_prefix = '[OpenRouter] '
+  elseif CONFIG.provider == 'copilot' and CONFIG.model then
+    provider_prefix = '[Copilot] '
+  end
+
   if type(CONFIG.model_name) == 'string' and CONFIG.model_name ~= '' then
-    return CONFIG.model_name
+    return provider_prefix .. CONFIG.model_name
   end
   if type(CONFIG.model) == 'string' and CONFIG.model ~= '' then
-    return CONFIG.model
+    return provider_prefix .. CONFIG.model
   end
-  return 'Copilot default'
+
+  if CONFIG.provider == 'copilot' then
+    return 'Copilot default'
+  end
+  return 'Unknown'
 end
 
 -- Try to get headers from Avante's copilot provider (so we don't maintain them)
@@ -486,16 +509,13 @@ local function clean_message(message)
   return result
 end
 
---- Generate commit message using Copilot (async)
----@param branch string
----@param recent_commits string
----@param diff string
+--- Completion for GitHub Copilot
+---@param full_prompt string
 ---@param callback function(string|nil, table|nil)
 ---@param status_callback function(string)|nil
 ---@param request_context table|nil
-local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback, request_context)
+local function complete_copilot(full_prompt, callback, status_callback, request_context)
   local log = setup_logger()
-  log.info 'Starting commit message generation'
 
   local function is_cancelled()
     return request_context and request_context.is_cancelled and request_context.is_cancelled()
@@ -513,38 +533,25 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     end
   end
 
-  local requested_model = get_selected_model_name()
-
   report_status 'Authenticating with Copilot'
 
   get_api_token_async(function(token)
     if is_cancelled() then
-      log.debug 'Generation cancelled before API token usage'
       return
     end
 
     if not token then
-      log.error 'Failed to get API token'
-      vim.notify('Could not get Copilot API token. See ai-commit logs.', vim.log.levels.ERROR)
       callback(nil, nil)
       return
     end
 
     local curl = require 'plenary.curl'
     local endpoint = (state.copilot_token.endpoints and state.copilot_token.endpoints.api) or COPILOT_API_ENDPOINT
-    log.debug('Using endpoint: ' .. endpoint)
 
     local start_time = vim.uv.hrtime()
-
     local headers = get_copilot_headers()
     headers['Authorization'] = 'Bearer ' .. token
     headers['Content-Type'] = 'application/json'
-
-    -- Format the full prompt with context
-    report_status 'Preparing prompt'
-    local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
-    log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
-    log.debug('Full prompt being sent to AI:\n' .. string.rep('=', 80) .. '\n' .. full_prompt .. '\n' .. string.rep('=', 80))
 
     local request_body = {
       messages = { { role = 'user', content = full_prompt } },
@@ -553,12 +560,12 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
       max_tokens = CONFIG.max_tokens,
     }
 
-    -- Only include model if explicitly set
     if CONFIG.model then
       request_body.model = CONFIG.model
     end
 
-    report_status('Waiting for response from ' .. requested_model)
+    local model_display = CONFIG.model or 'auto'
+    report_status('Waiting for response from ' .. model_display)
 
     local job = curl.post(endpoint .. '/chat/completions', {
       headers = headers,
@@ -566,7 +573,6 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
       timeout = CONFIG.chat_timeout,
       callback = vim.schedule_wrap(function(response)
         if is_cancelled() then
-          log.debug 'Ignoring Copilot chat response for cancelled request'
           return
         end
 
@@ -575,7 +581,7 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
         if response.status ~= 200 then
           local response_body = format_body_for_log(response.body)
           log.error(string.format('Copilot API error: %d (took %.0fms) body=%s', response.status, elapsed_ms, response_body))
-          vim.notify('Copilot API request failed (' .. response.status .. '). See ai-commit logs for response body.', vim.log.levels.ERROR)
+          vim.notify('Copilot API request failed (' .. response.status .. '). See ai-commit logs.', vim.log.levels.ERROR)
           callback(nil, nil)
           return
         end
@@ -583,25 +589,20 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
         local ok, data = pcall(vim.json.decode, response.body)
         if not ok or not data.choices or not data.choices[1] or not data.choices[1].message then
           log.error('Failed to parse Copilot response body=' .. format_body_for_log(response.body))
-          vim.notify('Failed to parse Copilot response. See ai-commit logs for response body.', vim.log.levels.ERROR)
           callback(nil, nil)
           return
         end
 
         local message = clean_message(data.choices[1].message.content)
         local used_model = data.model or request_body.model or 'auto'
-        log.info(string.format('Generated commit message (took %.0fms, model=%s): %s', elapsed_ms, used_model, message:sub(1, 50) .. '...'))
-        callback(message, { requested_model = requested_model, used_model = used_model })
+        log.info(string.format('Generated commit message (took %.0fms, model=%s)', elapsed_ms, used_model))
+        callback(message, { requested_model = model_display, used_model = used_model })
       end),
       on_error = vim.schedule_wrap(function(err)
         if is_cancelled() then
-          log.debug 'Copilot chat request cancelled'
           return
         end
-
-        local stderr = err and err.stderr or '<no stderr>'
-        log.error('Copilot chat request failed: ' .. tostring(stderr))
-        vim.notify('Copilot API request failed. See ai-commit logs.', vim.log.levels.ERROR)
+        log.error('Copilot chat request failed: ' .. tostring(err and err.stderr or 'unknown error'))
         callback(nil, nil)
       end),
     })
@@ -610,8 +611,124 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
   end, request_context)
 end
 
---- Get available Copilot models
----@return table models
+--- Completion for OpenRouter
+---@param full_prompt string
+---@param callback function(string|nil, table|nil)
+---@param status_callback function(string)|nil
+---@param request_context table|nil
+local function complete_openrouter(full_prompt, callback, status_callback, request_context)
+  local log = setup_logger()
+
+  local function is_cancelled()
+    return request_context and request_context.is_cancelled and request_context.is_cancelled()
+  end
+
+  local function register_http_job(job)
+    if request_context and request_context.register_http_job then
+      request_context.register_http_job(job)
+    end
+  end
+
+  local function report_status(message)
+    if status_callback then
+      status_callback(message)
+    end
+  end
+
+  local api_key = os.getenv 'AVANTE_OPENROUTER_API_KEY' or os.getenv 'OPENROUTER_API_KEY'
+  if not api_key then
+    log.error 'OpenRouter API key not found'
+    vim.notify('OpenRouter API key not found. Please set AVANTE_OPENROUTER_API_KEY or OPENROUTER_API_KEY.', vim.log.levels.ERROR)
+    callback(nil, nil)
+    return
+  end
+
+  local curl = require 'plenary.curl'
+  local endpoint = CONFIG.openrouter.endpoint
+  local start_time = vim.uv.hrtime()
+
+  local headers = {
+    ['Authorization'] = 'Bearer ' .. api_key,
+    ['Content-Type'] = 'application/json',
+    ['HTTP-Referer'] = 'https://github.com/opencode-sh/ai-commit',
+    ['X-Title'] = 'ai-commit.lua',
+  }
+
+  local request_body = {
+    messages = { { role = 'user', content = full_prompt } },
+    stream = false,
+    temperature = CONFIG.temperature,
+    max_tokens = CONFIG.max_tokens,
+    model = CONFIG.model or 'anthropic/claude-sonnet-4-20250514',
+  }
+
+  report_status('Waiting for response from ' .. request_body.model)
+
+  local job = curl.post(endpoint .. '/chat/completions', {
+    headers = headers,
+    body = vim.json.encode(request_body),
+    timeout = CONFIG.chat_timeout,
+    callback = vim.schedule_wrap(function(response)
+      if is_cancelled() then
+        return
+      end
+
+      local elapsed_ms = (vim.uv.hrtime() - start_time) / 1e6
+
+      if response.status ~= 200 then
+        local response_body = format_body_for_log(response.body)
+        log.error(string.format('OpenRouter API error: %d (took %.0fms) body=%s', response.status, elapsed_ms, response_body))
+        vim.notify('OpenRouter API request failed (' .. response.status .. '). See ai-commit logs.', vim.log.levels.ERROR)
+        callback(nil, nil)
+        return
+      end
+
+      local ok, data = pcall(vim.json.decode, response.body)
+      if not ok or not data.choices or not data.choices[1] or not data.choices[1].message then
+        log.error('Failed to parse OpenRouter response body=' .. format_body_for_log(response.body))
+        callback(nil, nil)
+        return
+      end
+
+      local message = clean_message(data.choices[1].message.content)
+      local used_model = data.model or request_body.model
+      log.info(string.format('Generated commit message (took %.0fms, model=%s) content length: %d', elapsed_ms, used_model, #message))
+      log.debug('Message content: [[' .. message .. ']]')
+      callback(message, { requested_model = request_body.model, used_model = used_model })
+    end),
+    on_error = vim.schedule_wrap(function(err)
+      if is_cancelled() then
+        return
+      end
+      log.error('OpenRouter chat request failed: ' .. tostring(err and err.stderr or 'unknown error'))
+      callback(nil, nil)
+    end),
+  })
+
+  register_http_job(job)
+end
+
+--- Generate commit message using the configured provider (async)
+---@param branch string
+---@param recent_commits string
+---@param diff string
+---@param callback function(string|nil, table|nil)
+---@param status_callback function(string)|nil
+---@param request_context table|nil
+local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback, request_context)
+  local log = setup_logger()
+  log.info(string.format('Starting commit message generation using %s provider', CONFIG.provider))
+
+  local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
+  log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
+
+  if CONFIG.provider == 'openrouter' then
+    complete_openrouter(full_prompt, callback, status_callback, request_context)
+  else
+    complete_copilot(full_prompt, callback, status_callback, request_context)
+  end
+end
+
 local function get_copilot_models()
   local log = setup_logger()
 
@@ -622,8 +739,26 @@ local function get_copilot_models()
     local success, models = pcall(avante_copilot.list_models, avante_copilot)
     if success and models and #models > 0 then
       log.info(string.format('Got %d models from Avante', #models))
-      -- Avante returns models with structure: { id, name, display_name, policy, version, ... }
-      return models
+
+      -- Filter out disabled models
+      local filtered = {}
+      for _, model in ipairs(models) do
+        local is_disabled = false
+        if model.policy and type(model.policy) == 'table' then
+          local s = model.policy.state
+          if s == 'disabled' or s == 'unconfigured' then
+            is_disabled = true
+          end
+        elseif model.policy == false then
+          is_disabled = true
+        end
+
+        if not is_disabled then
+          table.insert(filtered, model)
+        end
+      end
+
+      return filtered
     end
   end
 
@@ -632,104 +767,82 @@ local function get_copilot_models()
     { id = 'gpt-4o-2024-11-20', name = 'GPT-4o' },
     { id = 'gpt-4o-mini', name = 'GPT-4o Mini' },
     { id = 'gpt-4o', name = 'GPT-4o' },
-    { id = 'gpt-5-mini', name = 'GPT-5 mini' },
   }
 
   return fallback_models
 end
 
---- Select and save a Copilot model
+--- Select and save a model from multiple providers
 local function select_model()
-  local models = get_copilot_models()
+  local log = setup_logger()
+  local model_fetcher = require 'model_fetcher'
 
-  if not models or #models == 0 then
-    vim.notify('No models available', vim.log.levels.ERROR)
-    return
+  local all_models = {}
+
+  -- 1. Get Copilot models
+  local copilot_models = get_copilot_models()
+  for _, m in ipairs(copilot_models) do
+    table.insert(all_models, {
+      id = m.id,
+      name = m.display_name or m.name or m.id,
+      provider = 'copilot',
+    })
   end
 
-  -- Filter out disabled models and duplicates
-  local enabled_models = {}
-  local seen_ids = {}
-  for _, model in ipairs(models) do
-    -- Skip if already seen this model ID
-    if model.id and seen_ids[model.id] then
-      goto continue
-    end
+  -- Add Copilot auto option
+  table.insert(all_models, 1, { id = nil, name = 'Auto (use default)', provider = 'copilot' })
 
-    local is_disabled = false
-    if model.policy and type(model.policy) == 'table' then
-      local s = model.policy.state
-      if s == 'disabled' or s == 'unconfigured' then
-        is_disabled = true
+  local function show_picker(models_to_show)
+    -- Sort models: provider first, then name
+    table.sort(models_to_show, function(a, b)
+      if a.provider ~= b.provider then
+        return a.provider < b.provider
       end
-    elseif model.policy == false then
-      is_disabled = true
-    end
+      return a.name < b.name
+    end)
 
-    if not is_disabled then
-      table.insert(enabled_models, model)
-      if model.id then
-        seen_ids[model.id] = true
+    vim.ui.select(models_to_show, {
+      prompt = 'Select AI Model:',
+      format_item = function(item)
+        local is_current = (item.id == CONFIG.model and item.provider == CONFIG.provider)
+          or (not item.id and not CONFIG.model and item.provider == CONFIG.provider)
+        local marker = is_current and '✓ ' or '  '
+        local provider_label = '[' .. item.provider:sub(1, 1):upper() .. item.provider:sub(2) .. '] '
+        local display = item.name
+        if item.id and item.id ~= item.name then
+          display = display .. ' (' .. item.id .. ')'
+        end
+        return marker .. provider_label .. display
+      end,
+    }, function(choice)
+      if not choice then
+        return
       end
-    end
 
-    ::continue::
+      CONFIG.provider = choice.provider
+      CONFIG.model = choice.id
+      CONFIG.model_name = choice.name
+      if choice.provider == 'copilot' and not choice.id then
+        CONFIG.model_name = nil
+      end
+
+      log.info('Model changed to: ' .. get_selected_model_name())
+      save_preferences()
+    end)
   end
 
-  -- Sort models alphabetically by display name
-  table.sort(enabled_models, function(a, b)
-    local name_a = a.display_name or a.name or a.id or ''
-    local name_b = b.display_name or b.name or b.id or ''
-    return name_a < name_b
-  end)
-
-  -- Add "Auto (use default)" option at the top
-  table.insert(enabled_models, 1, { id = nil, name = 'Auto (use default)' })
-
-  -- Get current model from CONFIG
-  local current_model = CONFIG.model
-
-  vim.ui.select(enabled_models, {
-    prompt = 'Select Copilot Model:',
-    format_item = function(model)
-      local is_current = (model.id == current_model) or (not model.id and not current_model)
-      local marker = is_current and '✓ ' or '  '
-
-      -- Use display_name or name for the friendly name
-      local display_name = model.display_name or model.name or model.id or 'Unknown'
-
-      -- Build display string
-      local display = display_name
-
-      -- Add ID in parentheses if different from display name
-      if model.id and model.id ~= display_name then
-        display = display .. ' (' .. model.id .. ')'
+  -- 2. Fetch OpenRouter models and then show picker
+  model_fetcher.fetch_openrouter_models(function(or_models)
+    if or_models then
+      for _, m_id in ipairs(or_models) do
+        table.insert(all_models, {
+          id = m_id,
+          name = m_id,
+          provider = 'openrouter',
+        })
       end
-
-      return marker .. display
-    end,
-  }, function(choice)
-    if not choice then
-      return
     end
-
-    -- Update runtime config
-    CONFIG.model = choice.id
-    CONFIG.model_name = choice.display_name or choice.name or choice.id
-    if not CONFIG.model then
-      CONFIG.model_name = nil
-    end
-
-    local log = setup_logger()
-    log.info('Model changed to: ' .. get_selected_model_name())
-
-    -- Save to preferences file (NOT the config file!)
-    save_preferences()
-    -- if save_preferences() then
-    --    vim.notify('Model saved: ' .. (choice.id or 'Auto'), vim.log.levels.INFO)
-    -- else
-    --    vim.notify('Model set: ' .. (choice.id or 'Auto') .. ' (could not save)', vim.log.levels.WARN)
-    -- end
+    show_picker(all_models)
   end)
 end
 
