@@ -14,10 +14,10 @@ local CONFIG = {
     -- API key is checked in the following environment variables:
     -- 1. AVANTE_OPENROUTER_API_KEY
     -- 2. OPENROUTER_API_KEY
+    reasoning = false, -- Set to true to allow reasoning in responses
   },
 
-  temperature = 0.3, -- Lower = more focused, higher = more creative
-  max_tokens = 1000, -- Max length of generated message
+  max_tokens = 10000, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
   max_diff_chars = 100000, -- Truncate very large diffs before sending to model
   chat_timeout = 30000, -- Chat completion timeout (ms)
@@ -556,7 +556,6 @@ local function complete_copilot(full_prompt, callback, status_callback, request_
     local request_body = {
       messages = { { role = 'user', content = full_prompt } },
       stream = false,
-      temperature = CONFIG.temperature,
       max_tokens = CONFIG.max_tokens,
     }
 
@@ -657,9 +656,9 @@ local function complete_openrouter(full_prompt, callback, status_callback, reque
   local request_body = {
     messages = { { role = 'user', content = full_prompt } },
     stream = false,
-    temperature = CONFIG.temperature,
     max_tokens = CONFIG.max_tokens,
     model = CONFIG.model or 'anthropic/claude-sonnet-4-20250514',
+    include_reasoning = CONFIG.openrouter.reasoning,
   }
 
   report_status('Waiting for response from ' .. request_body.model)
@@ -690,10 +689,38 @@ local function complete_openrouter(full_prompt, callback, status_callback, reque
         return
       end
 
-      local message = clean_message(data.choices[1].message.content)
+      local message_obj = data.choices[1].message
+      local content = message_obj.content or ''
+
+      -- Fallback: if content is empty but reasoning is present, use reasoning
+      -- This handles cases where the model returns reasoning instead of content
+      if (content == '' or content:match '^%s*$') and message_obj.reasoning then
+        log.warn 'Content was empty, falling back to reasoning field'
+        content = message_obj.reasoning
+      end
+
+      -- If everything is empty, try to get anything from the message object
+      if content == '' or content:match '^%s*$' then
+        log.warn 'Both content and reasoning were empty. Inspecting message object.'
+        for k, v in pairs(message_obj) do
+          if type(v) == 'string' and v ~= '' then
+            log.info('Found non-empty string field: ' .. k)
+            content = v
+            break
+          end
+        end
+      end
+
+      local message = clean_message(content)
       local used_model = data.model or request_body.model
       log.info(string.format('Generated commit message (took %.0fms, model=%s) content length: %d', elapsed_ms, used_model, #message))
       log.debug('Message content: [[' .. message .. ']]')
+
+      -- Report the actual model being used if it differs from requested
+      if used_model ~= request_body.model then
+        report_status('Using ' .. used_model)
+      end
+
       callback(message, { requested_model = request_body.model, used_model = used_model })
     end),
     on_error = vim.schedule_wrap(function(err)
