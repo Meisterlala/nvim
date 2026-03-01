@@ -7,36 +7,26 @@ return {
     { 'gK', desc = 'Hover select provider' },
     { '<C-p>', mode = 'n', desc = 'Hover previous source' },
     { '<C-n>', mode = 'n', desc = 'Hover next source' },
-    -- { '<MouseMove>', mode = 'n', desc = 'Hover mouse' },
     { '<leader>H', desc = 'Toggle [H]over' },
   },
   config = function()
     local hover = require 'hover'
     hover.setup {
-      -- Require providers
-      --- @type (string|Hover.Config.Provider)[]
       providers = {
         'hover.providers.lsp',
         'hover.providers.diagnostic',
         'hover.providers.dap',
-        'hover.providers.dictionary',
-        -- require('hover.providers.gh')
-        -- require('hover.providers.gh_user')
-        -- require('hover.providers.jira')
-        -- require('hover.providers.fold_preview')
-        -- require('hover.providers.man')
-        -- require('hover.providers.dictionary')
-        -- 'hover.providers.highlight',
+        {
+          module = 'hover.providers.dictionary',
+          enabled = function(bufnr)
+            return #vim.lsp.get_clients { bufnr = bufnr } == 0
+          end,
+        },
       },
-      preview_opts = {
-        border = 'none',
-      },
-      -- Whether the contents of a currently open hover window should be moved
-      -- to a :h preview-window when pressing the hover keymap.
+      preview_opts = { border = 'none' },
       preview_window = true,
       title = false,
       mouse_providers = {
-        -- 'hover.providers.highlight',
         'hover.providers.lsp',
         'hover.providers.diagnostic',
         'hover.providers.dap',
@@ -44,46 +34,52 @@ return {
       mouse_delay = 200,
     }
 
-    -- Setup keymaps
     vim.keymap.set('n', 'K', hover.open, { desc = 'hover.nvim' })
-    -- vim.keymap.set('n', 'gK', function()
-    --   hover.select {}
-    -- end, { desc = 'hover.nvim (select)' })
-    vim.keymap.set('n', '<C-p>', function()
-      hover.switch 'previous'
-    end, { desc = 'hover.nvim (previous source)' })
-    vim.keymap.set('n', '<C-n>', function()
-      hover.switch 'next'
-    end, { desc = 'hover.nvim (next source)' })
+    vim.keymap.set('n', '<C-p>', function() hover.switch 'previous' end, { desc = 'hover.nvim (previous source)' })
+    vim.keymap.set('n', '<C-n>', function() hover.switch 'next' end, { desc = 'hover.nvim (next source)' })
 
-    local hover_enabled = true
+    local hover_enabled = false
+    vim.o.mousemoveevent = false
+
     vim.keymap.set('n', '<leader>H', function()
       hover_enabled = not hover_enabled
+      vim.o.mousemoveevent = hover_enabled
+      if hover_enabled then
+        vim.keymap.set('n', '<MouseMove>', hover.mouse, { desc = 'hover.nvim (mouse)' })
+      else
+        pcall(vim.keymap.del, 'n', '<MouseMove>')
+      end
       vim.notify('Hover ' .. (hover_enabled and 'Enabled' or 'Disabled'))
     end, { desc = 'Toggle [H]over' })
 
-    -- Mouse support
-    -- vim.keymap.set('n', '<MouseMove>', require('hover').mouse, { desc = 'hover.nvim (mouse)' })
-
-    -- vim.o.mousemoveevent = true
-
-    -- Auto open docs on hover, but only for LSP-attached buffers
     vim.api.nvim_create_autocmd('CursorHold', {
       group = vim.api.nvim_create_augroup('hover_auto_open', { clear = true }),
       callback = function()
-        if not hover_enabled then
-          return
-        end
+        if not hover_enabled or vim.bo.buftype ~= '' then return end
         local bufnr = vim.api.nvim_get_current_buf()
-        -- Only trigger automatically if a hover window isn't already open
-        local hover_win = vim.b[bufnr].hover_preview
-        if hover_win and vim.api.nvim_win_is_valid(hover_win) then
-          return
-        end
-        if vim.api.nvim_buf_is_loaded(bufnr) and #vim.lsp.get_clients { bufnr = bufnr } > 0 then
-          require('hover').open()
-        end
+        if vim.b[bufnr].hover_preview and vim.api.nvim_win_is_valid(vim.b[bufnr].hover_preview) then return end
+        pcall(hover.open)
       end,
     })
+
+    -- Keep the "Invalid window id" fix
+    local util = require('hover.util')
+    local original_open = util.open_floating_preview
+    util.open_floating_preview = function(...)
+      local winid = original_open(...)
+      if not winid or not vim.api.nvim_win_is_valid(winid) then
+        return winid
+      end
+
+      local original_set = vim.api.nvim_set_option_value
+      vim.api.nvim_set_option_value = function(name, val, opts)
+        if opts and opts.win == winid then
+          if not vim.api.nvim_win_is_valid(winid) then return end
+        end
+        return original_set(name, val, opts)
+      end
+      
+      return winid
+    end
   end,
 }
