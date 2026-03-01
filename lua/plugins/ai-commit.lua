@@ -60,7 +60,7 @@ SPECIFICATION (https://www.conventionalcommits.org/en/v1.0.0/):
 ADDITIONAL GUIDELINES:
 - Description: Use lowercase, imperative mood, no ending period, max 50 chars
 - Header Only: Most of the time, ONLY output the single header line (type[scope]: description).
-- Body: STRICTLY FORBIDDEN for 95%% of commits. DO NOT include a body for small changes, simple fixes, or minor features.
+- Body: STRICTLY FORBIDDEN for 90%% of commits. DO NOT include a body for small changes, simple fixes, or minor features.
 - Body: ONLY include a body if the change is a massive architectural shift, highly complex, or a BREAKING CHANGE.
 - Body Formatting: If a body is absolutely necessary, wrap at 72 chars, explain WHAT and WHY (not HOW). DO NOT ramble or over-explain.
 - Type casing: Any casing may be used, but be consistent (prefer lowercase)
