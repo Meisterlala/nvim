@@ -4,19 +4,7 @@ return {
     'NeogitOrg/neogit',
     dependencies = {
       'nvim-lua/plenary.nvim', -- required
-      {
-        'sindrets/diffview.nvim',
-        opts = {
-          -- The default view is 'diff2' which shows the diff of the current file in the left pane and the diff of the staged file in
-          -- the right pane. You can change this to 'diff1' to show only the current file's diff.
-          view = {
-            default = {
-              layout = 'diff2_horizontal',
-            },
-          },
-        },
-      },
-
+      'sindrets/diffview.nvim',
       -- Only one of these is needed.
       'nvim-telescope/telescope.nvim', -- optional
     },
