@@ -31,6 +31,14 @@ return {
           opts = { skip = true },
         },
         {
+          filter = { event = 'lsp', kind = 'progress' },
+          opts = { skip = true },
+        },
+        {
+          filter = { event = 'lsp' },
+          opts = { merge = true, replace = true },
+        },
+        {
           -- Hide "-- INSERT --", "-- VISUAL --", etc.
           filter = { event = 'msg_showmode' },
           opts = { skip = true },
@@ -69,6 +77,7 @@ return {
         fps = 1,
         timeout = 3000,
         stages = 'static',
+        merge = true,
       },
       keys = {
         {

@@ -16,13 +16,21 @@ return {
     'WhoIsSethDaniel/mason-tool-installer.nvim',
 
     -- Useful status updates for LSP.
-    { 'j-hui/fidget.nvim', opts = {
-      notification = {
-        window = {
-          winblend = 0,
+    {
+      'j-hui/fidget.nvim',
+      opts = {
+        progress = {
+          suppress_on_insert = true, -- Suppress new messages while in insert mode
+          ignore_done_already = true, -- Ignore new tasks that are already complete
+          ignore_empty_message = true, -- Ignore new tasks that don't contain a message
+        },
+        notification = {
+          window = {
+            winblend = 0,
+          },
         },
       },
-    } },
+    },
 
     -- Allows extra capabilities provided by nvim-cmp
     'hrsh7th/cmp-nvim-lsp',
@@ -165,7 +173,7 @@ return {
 
     require('mason-lspconfig').setup {
       automatic_enable = {
-        exclude = { 'powershell_es' },
+        exclude = { 'powershell_es', 'ruff' },
       },
       ensure_installed = {},
       automatic_installation = true,
