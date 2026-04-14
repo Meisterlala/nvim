@@ -62,6 +62,7 @@ return {
       },
       indent = { enabled = false },
       input = { enabled = true },
+      notifier = { enabled = false },
       git = { enabled = false },
       image = { enabled = false },
       -- Might re-enable at some point
