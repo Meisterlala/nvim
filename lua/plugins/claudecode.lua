@@ -29,6 +29,6 @@ return {
   },
   keys = {
     -- Your keymaps here
-    { '<leader>cs', '<cmd>ClaudeCodeSend<cr>', mode = 'v', desc = 'Send to [C]laude' },
+    { '<leader>da', '<cmd>ClaudeCodeSend<cr>', mode = 'v', desc = 'Send to Cl[a]ude' },
   },
 }

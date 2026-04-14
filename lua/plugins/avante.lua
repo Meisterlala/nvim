@@ -198,19 +198,19 @@ return {
     -- Additional keymaps for Avante
     vim.keymap.set({ 'n', 'v' }, '<leader>aa', function()
       require('avante.api').ask()
-    end, { desc = '[A]vante [A]sk' })
+    end)
 
     vim.keymap.set('n', '<leader>ac', function()
       vim.cmd 'AvanteChat'
-    end, { desc = '[A]vante [C]hat' })
+    end)
 
     vim.keymap.set('n', '<leader>ar', function()
       require('avante.api').refresh()
-    end, { desc = '[A]vante [R]efresh' })
+    end)
 
     vim.keymap.set('v', '<leader>ae', function()
       require('avante.api').edit()
-    end, { desc = '[A]vante [E]dit' })
+    end)
 
     -- Provider switcher that works with both ACP and regular providers
     vim.keymap.set('n', '<leader>ap', function()
@@ -241,7 +241,7 @@ return {
           vim.notify('Switched to provider: ' .. choice.name, vim.log.levels.INFO)
         end
       end)
-    end, { desc = '[A]vante [P]rovider switch' })
+    end)
 
     -- Zen mode alias for terminal
     vim.api.nvim_create_user_command('AvanteZen', function()

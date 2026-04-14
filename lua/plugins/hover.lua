@@ -7,7 +7,7 @@ return {
     { 'gK', desc = 'Hover select provider' },
     { '<C-p>', mode = 'n', desc = 'Hover previous source' },
     { '<C-n>', mode = 'n', desc = 'Hover next source' },
-    { '<leader>H', desc = 'Toggle [H]over' },
+    { '<leader>eh', desc = '[H]over' },
   },
   config = function()
     local hover = require 'hover'
@@ -41,7 +41,7 @@ return {
     local hover_enabled = false
     vim.o.mousemoveevent = false
 
-    vim.keymap.set('n', '<leader>H', function()
+    vim.keymap.set('n', '<leader>eh', function()
       hover_enabled = not hover_enabled
       vim.o.mousemoveevent = hover_enabled
       if hover_enabled then
@@ -50,7 +50,7 @@ return {
         pcall(vim.keymap.del, 'n', '<MouseMove>')
       end
       vim.notify('Hover ' .. (hover_enabled and 'Enabled' or 'Disabled'))
-    end, { desc = 'Toggle [H]over' })
+    end, { desc = '[H]over' })
 
     vim.api.nvim_create_autocmd('CursorHold', {
       group = vim.api.nvim_create_augroup('hover_auto_open', { clear = true }),

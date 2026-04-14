@@ -5,7 +5,7 @@ return {
         autoSearchPaths = true,
         diagnosticMode = 'openFilesOnly',
         useLibraryCodeForTypes = true,
-        typeCheckingMode = 'basic',
+        typeCheckingMode = 'standard',
         -- reportMissingTypeArgument = 'none',
         -- reportUnknownArgumentType = 'none',
       },

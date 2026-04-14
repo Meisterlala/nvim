@@ -23,7 +23,7 @@ return {
     -- vim.keymap.set({ 'n', 'x' }, '<C-x>', function()
     --   require('opencode').select()
     -- end, { desc = 'Execute opencode action…' })
-    vim.keymap.set({ 'n', 't' }, '<C-.>', function()
+    vim.keymap.set('n', '<leader>do', function()
       require('opencode').toggle()
     end, { desc = '[O]pencode' })
 
@@ -45,5 +45,5 @@ return {
     -- vim.keymap.set('n', '+', '<C-a>', { desc = 'Increment under cursor', noremap = true })
     -- vim.keymap.set('n', '-', '<C-x>', { desc = 'Decrement under cursor', noremap = true })
   end,
-  keys = { '<C-.>' },
+  keys = { { '<leader>do', desc = 'OpenCode' } },
 }

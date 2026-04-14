@@ -24,15 +24,17 @@ return { -- Useful plugin to show you pending keybinds.
 
     -- Document existing key chains
     spec = {
-      { '<leader>c', group = '[C]ode', mode = { 'n', 'x' } },
-      { '<leader>d', group = '[D]ocument' },
-      { '<leader>r', group = '[R]ename' },
-      { '<leader>s', group = '[S]earch' },
-      { '<leader>w', group = '[W]orkspace' },
-      { '<leader>a', group = '[A]vante' },
-      { '<leader>i', group = '[I]nsert' },
-      { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
-      { '<leader>S', group = '[S]ession' },
+      { '<leader>a', group = 'Avante' },
+      { '<leader>c', group = 'Code', mode = { 'n', 'x' } },
+      { '<leader>ct', group = 'Tests' },
+      { '<leader>d', group = 'Document' },
+      { '<leader>di', group = 'Insert' },
+      { '<leader>e', group = 'Editor' },
+      { '<leader>g', group = 'Git' },
+      { '<leader>s', group = 'Search' },
+      { '<leader>S', group = 'Session' },
+      { '<leader>M', hidden = true },
+      { '<leader>N', hidden = true },
     },
   },
   keys = {

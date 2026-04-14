@@ -14,9 +14,9 @@ return {
     require('render-markdown').setup(opts)
 
     -- Optional: Toggle markdown rendering on/off
-    vim.keymap.set('n', '<leader>mr', '<cmd>RenderMarkdown toggle<CR>', { desc = '[M]arkdown [R]ender toggle' })
+    vim.keymap.set('n', '<leader>em', '<cmd>RenderMarkdown toggle<CR>', { desc = '[M]arkdown render' })
   end,
   keys = {
-    { '<leader>mr', '<cmd>RenderMarkdown toggle<CR>', desc = '[M]arkdown [R]ender toggle' },
+    { '<leader>em', '<cmd>RenderMarkdown toggle<CR>', desc = '[M]arkdown render' },
   },
 }

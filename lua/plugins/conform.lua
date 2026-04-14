@@ -5,6 +5,21 @@ return { -- Autoformat
   cmd = { 'ConformInfo' },
   keys = {
     {
+      '<leader>ef',
+      function()
+        if vim.g.disable_autoformat then
+          vim.g.disable_autoformat = false
+          vim.b.disable_autoformat = false
+          vim.notify('Format on save enabled')
+        else
+          vim.g.disable_autoformat = true
+          vim.notify('Format on save disabled')
+        end
+      end,
+      mode = '',
+      desc = '[F]ormat on save',
+    },
+    {
       '<leader>f',
       function()
         require('conform').format { async = true, lsp_format = 'fallback' }

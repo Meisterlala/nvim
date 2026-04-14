@@ -60,9 +60,9 @@ return {
         desc = 'Accept Copilot suggestion',
       },
       {
-        '<Leader>C',
+        '<leader>ec',
         toggle_copilot,
-        desc = '[C]opilot toggle',
+        desc = '[C]opilot',
       },
     },
   },

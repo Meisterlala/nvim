@@ -187,10 +187,10 @@ vim.keymap.set('n', 'g#', 'g*', { desc = 'search forward for the identifier unde
 vim.keymap.set('n', '<C-w>t', '<cmd>tabnew<CR>', { desc = 'Open new tab' })
 
 -- Insert current date and time in format yyyy-mm-dd HH:MM
-vim.keymap.set('n', '<leader>id', function()
+vim.keymap.set('n', '<leader>did', function()
   local date = tostring(os.date '%Y-%m-%d %H:%M') -- get current date and time
   vim.api.nvim_put({ date }, 'c', true, true) -- put it below the current line
-end, { desc = '[I]nsert current [d]ate and time' })
+end, { desc = '[D]ate and time' })
 
 -- Yank to system clipboard with leader+y
 vim.keymap.set({ 'n', 'v' }, '<leader>y', [["+y]], { desc = '[Y]ank to system clipboard' })
