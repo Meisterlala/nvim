@@ -13,7 +13,7 @@ return {
         close_on_exit = true,
       }
       -- Keymaps
-      vim.keymap.set('n', '<leader>T', '<Cmd>ToggleTerm<CR>', { desc = 'Open [T]erminal' })
+      vim.keymap.set('n', '<leader>t', '<Cmd>ToggleTerm<CR>', { desc = 'Open [T]erminal' })
     end,
     keys = {
       { '<leader>t', nil, desc = 'Open [T]erminal' },
