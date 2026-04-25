@@ -16,7 +16,7 @@ return {
       vim.keymap.set('n', '<leader>T', '<Cmd>ToggleTerm<CR>', { desc = 'Open [T]erminal' })
     end,
     keys = {
-      { '<leader>T', nil, desc = 'Open [T]erminal' },
+      { '<leader>t', nil, desc = 'Open [T]erminal' },
     },
   },
 }
