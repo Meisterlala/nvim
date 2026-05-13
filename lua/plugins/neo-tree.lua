@@ -41,4 +41,20 @@ return {
       },
     },
   },
+  config = function(_, opts)
+    local events = require 'neo-tree.events'
+    local define_autocmd_event = events.define_autocmd_event
+
+    events.define_autocmd_event = function(event_name, autocmds, ...)
+      for index, autocmd in ipairs(autocmds) do
+        if autocmd == 'BufModifiedSet' then
+          autocmds[index] = 'OptionSet modified'
+        end
+      end
+
+      return define_autocmd_event(event_name, autocmds, ...)
+    end
+
+    require('neo-tree').setup(opts)
+  end,
 }
