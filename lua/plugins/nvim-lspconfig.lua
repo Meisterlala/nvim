@@ -173,7 +173,7 @@ return {
 
     require('mason-lspconfig').setup {
       automatic_enable = {
-        exclude = { 'powershell_es', 'ruff' },
+        exclude = { 'powershell_es', 'ruff', 'omnisharp' },
       },
       ensure_installed = {},
       automatic_installation = true,
