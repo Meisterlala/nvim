@@ -78,7 +78,8 @@ local function apply_context(context)
     end
 
     vim.defer_fn(function()
-      vim.lsp.enable({ "yamlls" })
+      vim.lsp.enable("yamlls")
+      vim.api.nvim_exec_autocmds("FileType", { buf = vim.api.nvim_get_current_buf() })
     end, 100)
   else
     local lspconfig = require("lspconfig")
