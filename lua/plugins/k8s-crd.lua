@@ -1,7 +1,6 @@
 --- @type LazySpec | LazySpec[]
 return {
-  'mrlunchbox777/nvim-k8s-crd',
-  branch = 'fix-pcall-and-config-nil',
+  dir = vim.fn.stdpath 'config' .. '/local/nvim-k8s-crd',
   ft = { 'yaml' },
   dependencies = { 'neovim/nvim-lspconfig' },
   config = function()
