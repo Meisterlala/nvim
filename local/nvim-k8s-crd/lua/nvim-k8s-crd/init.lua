@@ -73,7 +73,7 @@ local function apply_context(context)
 
     for _, client in ipairs(vim.lsp.get_clients()) do
       if client.name == "yamlls" then
-        vim.lsp.stop_client(client.id)
+        client:stop()
       end
     end
 
