@@ -136,6 +136,7 @@ function M.chat(request)
   local metrics = {}
   local thinking_chars = 0
   local last_status_key = nil
+  local generation_started_at = nil
 
   local function emit_status(status)
     if not request.on_status then
@@ -146,7 +147,7 @@ function M.chat(request)
     status.model = status.model or selected_model
     status.used_model = status.used_model or final_model
     status.elapsed_ms = status.elapsed_ms or elapsed_ms_since(started_at)
-    local key = table.concat({ status.phase or '', status.message or '', tostring(status.tokens), tostring(status.used_model) }, '|')
+    local key = table.concat({ status.phase or '', status.message or '', tostring(status.tokens_per_second), tostring(status.used_model) }, '|')
     if key == last_status_key then
       return
     end
@@ -207,13 +208,20 @@ function M.chat(request)
         metrics.prompt_eval_duration = data.prompt_eval_duration or metrics.prompt_eval_duration
         metrics.eval_count = data.eval_count or metrics.eval_count
         metrics.eval_duration = data.eval_duration or metrics.eval_duration
+        if not generation_started_at and data.eval_count then
+          generation_started_at = vim.uv.hrtime()
+        end
+        local status_tokens_per_second = tokens_per_second(data.eval_count, data.eval_duration)
+        if not status_tokens_per_second and generation_started_at and data.eval_count and data.eval_count > 0 then
+          status_tokens_per_second = data.eval_count / ((vim.uv.hrtime() - generation_started_at) / 1e9)
+        end
         local thinking = data.message and data.message.thinking or ''
         if thinking ~= '' then
           thinking_chars = thinking_chars + #thinking
           emit_status {
             phase = 'thinking',
             message = 'Thinking',
-            tokens = data.eval_count,
+            tokens_per_second = status_tokens_per_second,
           }
         end
         local chunk = data.message and data.message.content or ''
@@ -222,7 +230,7 @@ function M.chat(request)
           emit_status {
             phase = thinking_chars > 0 and 'generating' or 'generating',
             message = 'Generating response',
-            tokens = data.eval_count,
+            tokens_per_second = status_tokens_per_second,
           }
           if request.on_chunk then
             vim.schedule(function()

@@ -168,9 +168,9 @@ describe('ollama provider options', function()
   it('emits standardized thinking and generating status events', function()
     package.loaded['ai-provider.curl'] = {
       stream_json_lines = function(request)
-        request.on_json_line { model = 'gemma4:e2b', message = { thinking = 'thinking...' }, eval_count = 7 }
-        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' }, eval_count = 9 }
-        request.on_json_line { model = 'gemma4:e2b', done_reason = 'stop', eval_count = 9 }
+        request.on_json_line { model = 'gemma4:e2b', message = { thinking = 'thinking...' }, eval_count = 7, eval_duration = 1000000000 }
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' }, eval_count = 9, eval_duration = 1000000000 }
+        request.on_json_line { model = 'gemma4:e2b', done_reason = 'stop', eval_count = 9, eval_duration = 1000000000 }
         request.callback(0)
         return { shutdown = function() end }
       end,
@@ -195,9 +195,9 @@ describe('ollama provider options', function()
 
     assert.are.same('generating', statuses[1].phase)
     assert.are.same('thinking', statuses[2].phase)
-    assert.are.same(7, statuses[2].tokens)
+    assert.are.same(7, statuses[2].tokens_per_second)
     assert.are.same('generating', statuses[3].phase)
-    assert.are.same(9, statuses[3].tokens)
+    assert.are.same(9, statuses[3].tokens_per_second)
     assert.are.same('done', statuses[4].phase)
   end)
 end)

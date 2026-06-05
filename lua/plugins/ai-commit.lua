@@ -265,11 +265,11 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
     elseif status.phase == 'loaded' then
       status_callback('Loaded model ' .. status_model)
     elseif status.phase == 'thinking' then
-      local token_suffix = status.tokens and (' (' .. status.tokens .. ' tokens)') or ''
-      status_callback('Thinking with ' .. status_model .. token_suffix)
+      local speed_suffix = status.tokens_per_second and string.format(' (%.1f t/s)', status.tokens_per_second) or ''
+      status_callback('Thinking with ' .. status_model .. speed_suffix)
     elseif status.phase == 'generating' then
-      local token_suffix = status.tokens and (' (' .. status.tokens .. ' tokens)') or ''
-      status_callback('Generating response with ' .. status_model .. token_suffix)
+      local speed_suffix = status.tokens_per_second and string.format(' (%.1f t/s)', status.tokens_per_second) or ''
+      status_callback('Generating response with ' .. status_model .. speed_suffix)
     elseif status.phase == 'error' then
       status_callback('Provider error from ' .. status_model)
     end

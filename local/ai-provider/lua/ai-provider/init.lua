@@ -51,6 +51,7 @@
 ---@field model? string Model/profile name.
 ---@field used_model? string Raw provider model name.
 ---@field tokens? integer Token count when the provider reports one.
+---@field tokens_per_second? number Generation throughput when the provider reports enough timing data.
 ---@field elapsed_ms? number Elapsed duration in milliseconds.
 
 ---@class AiProviderChatRequest
