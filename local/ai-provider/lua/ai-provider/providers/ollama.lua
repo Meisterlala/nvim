@@ -52,10 +52,17 @@ local function elapsed_ms_since(started_at)
 end
 
 local function tokens_per_second(count, duration_ns)
-  if type(count) ~= 'number' or type(duration_ns) ~= 'number' or duration_ns <= 0 then
+  if type(count) ~= 'number' or type(duration_ns) ~= 'number' or duration_ns < 1000000 then
     return nil
   end
   return count / (duration_ns / 1e9)
+end
+
+local function estimate_token_count(text)
+  if type(text) ~= 'string' or text == '' then
+    return 0
+  end
+  return math.max(1, math.floor((#text / 4) + 0.5))
 end
 
 function M.check(callback, opts)
@@ -137,6 +144,20 @@ function M.chat(request)
   local thinking_chars = 0
   local last_status_key = nil
   local generation_started_at = nil
+  local streamed_token_estimate = 0
+
+  local function approximate_stream_tokens_per_second()
+    if not generation_started_at or streamed_token_estimate == 0 then
+      return nil
+    end
+
+    local elapsed_seconds = math.max((vim.uv.hrtime() - generation_started_at) / 1e9, 0.25)
+    if elapsed_seconds <= 0 then
+      return nil
+    end
+
+    return streamed_token_estimate / elapsed_seconds
+  end
 
   local function emit_status(status)
     if not request.on_status then
@@ -152,6 +173,15 @@ function M.chat(request)
       return
     end
     last_status_key = key
+    log.debug(
+      string.format(
+        'ollama status phase=%s model=%s tokens_per_second=%s elapsed_ms=%.0f',
+        tostring(status.phase),
+        tostring(status.model),
+        status.tokens_per_second and string.format('%.2f', status.tokens_per_second) or 'nil',
+        status.elapsed_ms
+      )
+    )
     vim.schedule(function()
       request.on_status(status)
     end)
@@ -208,14 +238,16 @@ function M.chat(request)
         metrics.prompt_eval_duration = data.prompt_eval_duration or metrics.prompt_eval_duration
         metrics.eval_count = data.eval_count or metrics.eval_count
         metrics.eval_duration = data.eval_duration or metrics.eval_duration
-        if not generation_started_at and data.eval_count then
+        local thinking = data.message and data.message.thinking or ''
+        local chunk = data.message and data.message.content or ''
+        if not generation_started_at and (thinking ~= '' or chunk ~= '') then
           generation_started_at = vim.uv.hrtime()
         end
+        streamed_token_estimate = streamed_token_estimate + estimate_token_count(thinking) + estimate_token_count(chunk)
         local status_tokens_per_second = tokens_per_second(data.eval_count, data.eval_duration)
-        if not status_tokens_per_second and generation_started_at and data.eval_count and data.eval_count > 0 then
-          status_tokens_per_second = data.eval_count / ((vim.uv.hrtime() - generation_started_at) / 1e9)
+        if not status_tokens_per_second then
+          status_tokens_per_second = approximate_stream_tokens_per_second()
         end
-        local thinking = data.message and data.message.thinking or ''
         if thinking ~= '' then
           thinking_chars = thinking_chars + #thinking
           emit_status {
@@ -224,7 +256,6 @@ function M.chat(request)
             tokens_per_second = status_tokens_per_second,
           }
         end
-        local chunk = data.message and data.message.content or ''
         if chunk ~= '' then
           table.insert(chunks, chunk)
           emit_status {
@@ -304,11 +335,12 @@ function M.chat(request)
           if request.callback then
             request.callback(nil, meta)
           end
-          emit_status {
-            phase = 'error',
-            message = provider_error,
-            tokens = metrics.eval_count,
-          }
+        emit_status {
+          phase = 'error',
+          message = provider_error,
+          tokens = metrics.eval_count,
+          tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration),
+        }
           return
         end
         if done_reason == 'length' then
@@ -340,6 +372,7 @@ function M.chat(request)
             phase = 'error',
             message = meta.error,
             tokens = metrics.eval_count,
+            tokens_per_second = error_eval_tokens_per_second,
           }
           return
         end
@@ -354,6 +387,7 @@ function M.chat(request)
             phase = 'error',
             message = meta.error,
             tokens = metrics.eval_count,
+            tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration),
           }
           return
         end
@@ -362,6 +396,7 @@ function M.chat(request)
           phase = 'done',
           message = 'Response complete',
           tokens = metrics.eval_count,
+          tokens_per_second = eval_tokens_per_second,
         }
         if request.callback then
           request.callback(message, meta)

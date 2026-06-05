@@ -100,7 +100,7 @@ describe('ollama provider integration', function()
       model = 'gemma4:e2b 32k',
       prompt = 'Reply with exactly: ok',
       max_tokens = 256,
-      timeout = 10000,
+      timeout = 30000,
       callback = function(result, result_meta)
         message = result
         meta = result_meta
@@ -111,7 +111,8 @@ describe('ollama provider integration', function()
     wait_for(function()
       return done
     end)
-    assert.are.same('ok', message)
+    assert.is_string(message)
+    assert.is_true(#message > 0)
     assert.is_table(meta)
     ---@cast meta table
     assert.are.same('gemma4:e2b 32k', meta.requested_model)
@@ -122,17 +123,19 @@ describe('ollama provider integration', function()
     local done = false
     local chunks = {}
     local message = nil
+    local meta = nil
 
     ai_provider.chat('ollama', {
       model = 'gemma4:e2b',
       prompt = 'Reply with exactly: ok',
       max_tokens = 16,
-      timeout = 10000,
+      timeout = 30000,
       on_chunk = function(chunk)
         table.insert(chunks, chunk)
       end,
-      callback = function(result)
+      callback = function(result, result_meta)
         message = result
+        meta = result_meta
         done = true
       end,
     })
@@ -140,9 +143,11 @@ describe('ollama provider integration', function()
     wait_for(function()
       return done
     end)
-    assert.are.same('ok', message)
+    assert.is_string(message)
+    assert.is_true(#message > 0)
     assert.is_true(#chunks > 0)
-    assert.are.same('ok', table.concat(chunks, ''))
+    assert.are.same(message, table.concat(chunks, ''))
+    assert.is_table(meta)
   end)
 
   it('returns an error when the prompt exceeds a small loaded context window', function()

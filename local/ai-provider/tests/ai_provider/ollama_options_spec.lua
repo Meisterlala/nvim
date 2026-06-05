@@ -200,4 +200,40 @@ describe('ollama provider options', function()
     assert.are.same(9, statuses[3].tokens_per_second)
     assert.are.same('done', statuses[4].phase)
   end)
+
+  it('estimates live tokens per second before final ollama metrics arrive', function()
+    package.loaded['ai-provider.curl'] = {
+      stream_json_lines = function(request)
+        request.on_json_line { model = 'gemma4:e2b', message = { thinking = 'thinking...' } }
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' } }
+        request.on_json_line { model = 'gemma4:e2b', done_reason = 'stop', eval_count = 9, eval_duration = 1000000000 }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+    local statuses = {}
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'Reply with exactly: ok',
+      preload = false,
+      on_status = function(status)
+        table.insert(statuses, status)
+      end,
+      callback = function() end,
+    }
+
+    vim.wait(1000, function()
+      return #statuses >= 4
+    end, 10)
+
+    assert.are.same('thinking', statuses[2].phase)
+    assert.is_number(statuses[2].tokens_per_second)
+    assert.are.same('generating', statuses[3].phase)
+    assert.is_number(statuses[3].tokens_per_second)
+    assert.are.same('done', statuses[4].phase)
+    assert.are.same(9, statuses[4].tokens_per_second)
+  end)
 end)

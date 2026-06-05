@@ -1214,12 +1214,34 @@ local function insert_ai_commit_message()
 
     local status_chunks = { { status_line, 'Comment' } }
     local waiting_prefix = 'Waiting for response from '
+    local active_prefix, active_model, active_suffix = stage_text:match '^(Thinking with )(.+)( %(.- t/s%))$'
+    if not active_prefix then
+      active_prefix, active_model, active_suffix = stage_text:match '^(Generating response with )(.+)( %(.- t/s%))$'
+    end
+    if not active_prefix then
+      active_prefix, active_model = stage_text:match '^(Thinking with )(.+)$'
+    end
+    if not active_prefix then
+      active_prefix, active_model = stage_text:match '^(Generating response with )(.+)$'
+    end
     if vim.startswith(stage_text, waiting_prefix) then
       local model_name = stage_text:sub(#waiting_prefix + 1)
       status_chunks = {
         { waiting_prefix, 'Comment' },
         { model_name, CONFIG.model_highlight_group },
       }
+      local suffix = spinner_suffix_text()
+      if suffix ~= '' then
+        table.insert(status_chunks, { suffix, 'Comment' })
+      end
+    elseif active_prefix and active_model then
+      status_chunks = {
+        { active_prefix, 'Comment' },
+        { active_model, CONFIG.model_highlight_group },
+      }
+      if active_suffix then
+        table.insert(status_chunks, { active_suffix, 'Number' })
+      end
       local suffix = spinner_suffix_text()
       if suffix ~= '' then
         table.insert(status_chunks, { suffix, 'Comment' })
