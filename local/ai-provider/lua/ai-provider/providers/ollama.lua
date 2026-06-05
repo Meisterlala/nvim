@@ -305,8 +305,8 @@ function M.chat(request)
         end
         if done_reason == 'length' then
           meta.error = 'ollama stopped because the context or generation length limit was reached'
-          local prompt_tokens_per_second = tokens_per_second(metrics.prompt_eval_count, metrics.prompt_eval_duration)
-          local eval_tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration)
+          local error_prompt_tokens_per_second = tokens_per_second(metrics.prompt_eval_count, metrics.prompt_eval_duration)
+          local error_eval_tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration)
           log.error(
             string.format(
               'ollama length stop requested_model=%s used_model=%s prompt_chars=%d output_chars=%d context_size=%s max_tokens=%s load_ms=%s prompt_eval_count=%s prompt_eval_ms=%s prompt_tokens_per_second=%s eval_count=%s eval_ms=%s tokens_per_second=%s',
@@ -319,10 +319,10 @@ function M.chat(request)
               metrics.load_duration and string.format('%.0f', metrics.load_duration / 1e6) or 'nil',
               tostring(metrics.prompt_eval_count),
               metrics.prompt_eval_duration and string.format('%.0f', metrics.prompt_eval_duration / 1e6) or 'nil',
-              prompt_tokens_per_second and string.format('%.2f', prompt_tokens_per_second) or 'nil',
+              error_prompt_tokens_per_second and string.format('%.2f', error_prompt_tokens_per_second) or 'nil',
               tostring(metrics.eval_count),
               metrics.eval_duration and string.format('%.0f', metrics.eval_duration / 1e6) or 'nil',
-              eval_tokens_per_second and string.format('%.2f', eval_tokens_per_second) or 'nil'
+              error_eval_tokens_per_second and string.format('%.2f', error_eval_tokens_per_second) or 'nil'
             )
           )
           if request.callback then

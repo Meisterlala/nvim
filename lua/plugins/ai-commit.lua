@@ -293,8 +293,16 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
         local error_message = meta and meta.error or 'unknown error'
         local details = ''
         if meta then
+          local prompt_tokens_per_second = nil
+          if type(meta.prompt_eval_count) == 'number' and type(meta.prompt_eval_duration) == 'number' and meta.prompt_eval_duration > 0 then
+            prompt_tokens_per_second = meta.prompt_eval_count / (meta.prompt_eval_duration / 1e9)
+          end
+          local eval_tokens_per_second = nil
+          if type(meta.eval_count) == 'number' and type(meta.eval_duration) == 'number' and meta.eval_duration > 0 then
+            eval_tokens_per_second = meta.eval_count / (meta.eval_duration / 1e9)
+          end
           details = string.format(
-            ' (requested_model=%s used_model=%s done_reason=%s elapsed_ms=%s load_ms=%s prompt_eval_count=%s prompt_eval_ms=%s eval_count=%s eval_ms=%s)',
+            ' (requested_model=%s used_model=%s done_reason=%s elapsed_ms=%s load_ms=%s prompt_eval_count=%s prompt_eval_ms=%s prompt_tokens_per_second=%s eval_count=%s eval_ms=%s tokens_per_second=%s)',
             tostring(meta.requested_model),
             tostring(meta.used_model),
             tostring(meta.done_reason),
@@ -302,8 +310,10 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
             meta.load_duration and string.format('%.0f', meta.load_duration / 1e6) or 'nil',
             tostring(meta.prompt_eval_count),
             meta.prompt_eval_duration and string.format('%.0f', meta.prompt_eval_duration / 1e6) or 'nil',
+            prompt_tokens_per_second and string.format('%.2f', prompt_tokens_per_second) or 'nil',
             tostring(meta.eval_count),
-            meta.eval_duration and string.format('%.0f', meta.eval_duration / 1e6) or 'nil'
+            meta.eval_duration and string.format('%.0f', meta.eval_duration / 1e6) or 'nil',
+            eval_tokens_per_second and string.format('%.2f', eval_tokens_per_second) or 'nil'
           )
         end
         log.error(provider .. ' chat request failed: ' .. error_message .. details)
