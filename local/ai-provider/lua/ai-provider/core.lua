@@ -1,4 +1,5 @@
 local M = {}
+local log = require 'ai-provider.log'
 
 local providers = {
   ollama = require 'ai-provider.providers.ollama',
@@ -215,6 +216,7 @@ function M.chat(first, second)
   local provider, request = normalize_chat_args(first, second)
   local implementation = M.get_provider(provider)
   if not implementation or not implementation.chat then
+    log.error('chat requested unavailable provider: ' .. tostring(provider))
     if request.callback then
       request.callback(nil, nil)
     end
@@ -224,6 +226,7 @@ function M.chat(first, second)
   request.model = request.model or M.get_selected_model(provider)
   request.provider_config = get_provider_config(provider)
   if not request.model then
+    log.error('chat requested without selected model for provider: ' .. tostring(provider))
     if request.callback then
       request.callback(nil, nil)
     end
@@ -231,6 +234,17 @@ function M.chat(first, second)
     return nil
   end
 
+  log.info(
+    string.format(
+      'chat start provider=%s model=%s prompt_chars=%d max_tokens=%s context_size=%s stream=%s',
+      provider,
+      request.model,
+      type(request.prompt) == 'string' and #request.prompt or 0,
+      tostring(request.max_tokens),
+      tostring(request.context_size),
+      tostring(request.stream ~= false)
+    )
+  )
   return implementation.chat(request)
 end
 
@@ -332,6 +346,45 @@ function M.select_model(provider)
       end)
     end)
   end, { force = true })
+end
+
+function M.select_helper(opts, callback)
+  if type(opts) == 'function' then
+    callback = opts
+    opts = {}
+  end
+  opts = opts or {}
+
+  collect_models(function(models)
+    if #models == 0 then
+      vim.notify('No AI provider models are available.', vim.log.levels.WARN)
+      if callback then
+        callback(nil)
+      end
+      return
+    end
+
+    local current = opts.current
+    vim.ui.select(models, {
+      prompt = opts.prompt or 'Select AI provider model:',
+      format_item = function(item)
+        local selected = current and item.provider == current.provider and item.model == current.model
+        local marker = selected and '✓ ' or '  '
+        return marker .. item.label
+      end,
+    }, function(choice)
+      if not choice then
+        if callback then
+          callback(nil)
+        end
+        return
+      end
+
+      if callback then
+        callback({ provider = choice.provider, model = choice.model, label = choice.label })
+      end
+    end)
+  end)
 end
 
 local global_actions = { 'default', 'model', 'models' }

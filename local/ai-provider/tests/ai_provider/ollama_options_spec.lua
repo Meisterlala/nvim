@@ -30,6 +30,7 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b 64k',
       prompt = 'Reply with exactly: ok',
+      preload = false,
       max_tokens = 4,
       provider_config = {
         context_size = 1024 * 8,
@@ -74,6 +75,7 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b 32k',
       prompt = 'Reply with exactly: ok',
+      preload = false,
       context_size = 1024 * 16,
       keep_alive = '10m',
       provider_config = {
@@ -94,5 +96,108 @@ describe('ollama provider options', function()
     assert.is_table(captured.options)
     assert.are.same(1024 * 16, captured.options.num_ctx)
     assert.are.same('10m', captured.keep_alive)
+  end)
+
+  it('sends configured thinking mode for reasoning model profiles', function()
+    ---@type table|nil
+    local captured = nil
+    package.loaded['ai-provider.curl'] = {
+      stream_json_lines = function(request)
+        captured = request.body
+        request.on_json_line { model = 'qwen3.5:4b', message = { content = 'ok' }, done_reason = 'stop' }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+
+    ollama.chat {
+      model = 'qwen3.5:4b 256k',
+      prompt = 'Reply with exactly: ok',
+      preload = false,
+      provider_config = {
+        models = {
+          ['qwen3.5:4b 256k'] = {
+            model = 'qwen3.5:4b',
+            context_size = 1024 * 256,
+            think = false,
+          },
+        },
+      },
+      callback = function() end,
+    }
+
+    assert.is_table(captured)
+    ---@cast captured table
+    assert.are.same('qwen3.5:4b', captured.model)
+    assert.are.same(1024 * 256, captured.options.num_ctx)
+    assert.are.same(false, captured.think)
+  end)
+
+  it('returns an error instead of partial output when ollama stops for length', function()
+    package.loaded['ai-provider.curl'] = {
+      stream_json_lines = function(request)
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'Ref' }, done_reason = 'length' }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+    local message = 'unset'
+    local meta = nil
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'large prompt',
+      preload = false,
+      callback = function(result, result_meta)
+        message = result
+        meta = result_meta
+      end,
+    }
+
+    assert.is_nil(message)
+    assert.is_table(meta)
+    ---@cast meta table
+    assert.are.same('length', meta.done_reason)
+    assert.matches('length limit', meta.error)
+  end)
+
+  it('emits standardized thinking and generating status events', function()
+    package.loaded['ai-provider.curl'] = {
+      stream_json_lines = function(request)
+        request.on_json_line { model = 'gemma4:e2b', message = { thinking = 'thinking...' }, eval_count = 7 }
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' }, eval_count = 9 }
+        request.on_json_line { model = 'gemma4:e2b', done_reason = 'stop', eval_count = 9 }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+    local statuses = {}
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'Reply with exactly: ok',
+      preload = false,
+      on_status = function(status)
+        table.insert(statuses, status)
+      end,
+      callback = function() end,
+    }
+
+    vim.wait(1000, function()
+      return #statuses >= 4
+    end, 10)
+
+    assert.are.same('generating', statuses[1].phase)
+    assert.are.same('thinking', statuses[2].phase)
+    assert.are.same(7, statuses[2].tokens)
+    assert.are.same('generating', statuses[3].phase)
+    assert.are.same(9, statuses[3].tokens)
+    assert.are.same('done', statuses[4].phase)
   end)
 end)

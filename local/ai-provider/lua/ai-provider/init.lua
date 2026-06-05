@@ -9,11 +9,23 @@
 ---@field timeout? integer Optional provider timeout in milliseconds.
 ---@field context_size? integer Optional provider-wide default context size.
 ---@field keep_alive? string|integer Optional provider-wide keep-alive/unload timeout. Ollama accepts values like `4h`, `10m`, or `0`.
+---@field load_timeout? integer Optional model preload timeout in milliseconds. Used by Ollama before the normal chat timeout starts.
+---@field think? boolean Optional Ollama thinking mode override for reasoning models.
 ---@field models? table<string, string|AiProviderModelConfig> Optional logical model profiles. Keys are selectable model names.
+
+---@class AiProviderHelperConfig
+---@field provider string Provider name used by the helper.
+---@field model string Model/profile name returned by the helper. This is a reference to the configured model name, not copied options.
+---@field label? string Display label, usually `provider/model`.
+
+---@class AiProviderSelectHelperOptions
+---@field prompt? string Picker prompt.
+---@field current? AiProviderHelperConfig Current selection used for picker highlighting.
 
 ---@class AiProviderModelConfig
 ---@field model string Underlying provider model name.
 ---@field context_size? integer Optional model-specific context size override.
+---@field think? boolean Optional Ollama thinking mode override for this logical model profile.
 
 ---@class AiProviderConfig
 ---@field default_provider string Default provider used when no persisted default provider exists.
@@ -23,6 +35,23 @@
 ---@field requested_model string Model requested by the caller.
 ---@field used_model string Model reported by the provider response.
 ---@field elapsed_ms number Request duration in milliseconds.
+---@field done_reason? string Provider stop reason, if reported.
+---@field error? string Provider/runtime error when `message` is nil.
+---@field total_duration? integer Provider total duration in nanoseconds, when reported.
+---@field load_duration? integer Initial model load duration in nanoseconds, when reported.
+---@field prompt_eval_count? integer Prompt tokens evaluated, when reported.
+---@field prompt_eval_duration? integer Prompt evaluation duration in nanoseconds, when reported.
+---@field eval_count? integer Generated tokens evaluated, when reported.
+---@field eval_duration? integer Generation duration in nanoseconds, when reported.
+
+---@class AiProviderStatus
+---@field provider string Provider name.
+---@field phase string Standard phase, for example `loading`, `loaded`, `thinking`, `generating`, `done`, or `error`.
+---@field message string Human-readable status message.
+---@field model? string Model/profile name.
+---@field used_model? string Raw provider model name.
+---@field tokens? integer Token count when the provider reports one.
+---@field elapsed_ms? number Elapsed duration in milliseconds.
 
 ---@class AiProviderChatRequest
 ---@field provider? string Provider name. Defaults to `get_default_provider()`.
@@ -32,7 +61,11 @@
 ---@field max_tokens? integer Maximum generated tokens/provider equivalent.
 ---@field context_size? integer Per-request context size override.
 ---@field keep_alive? string|integer Per-request keep-alive/unload timeout override.
+---@field load_timeout? integer Per-request model preload timeout in milliseconds.
+---@field preload? boolean Whether to preload the model before chat. Defaults to false; callers such as ai-commit can enable it to exclude load time from chat timeout.
+---@field think? boolean Per-request Ollama thinking mode override.
 ---@field on_chunk? fun(chunk: string, raw: table) Called for each streamed text chunk.
+---@field on_status? fun(status: AiProviderStatus) Called with standardized provider progress updates.
 ---@field callback? fun(message: string|nil, meta: AiProviderChatMeta|nil) Called once the request finishes.
 ---@field is_cancelled? fun(): boolean Optional cancellation predicate.
 ---@field register_http_job? fun(job: table) Receives the provider job/process for external cancellation.
@@ -164,6 +197,14 @@ end
 ---@param provider? string Provider name. Omit to pick across all providers.
 function M.select_model(provider)
   return core.select_model(provider)
+end
+
+---Open a model picker for feature-specific callers. This does not persist state;
+---callers should save the returned provider/model reference themselves.
+---@param opts? AiProviderSelectHelperOptions|fun(selection: AiProviderHelperConfig|nil)
+---@param callback? fun(selection: AiProviderHelperConfig|nil) Called with the selected provider/model reference.
+function M.select_helper(opts, callback)
+  return core.select_helper(opts, callback)
 end
 
 ---@param arglead string Current command-line argument prefix.

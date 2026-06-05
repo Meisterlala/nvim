@@ -28,6 +28,27 @@ local function wait_for(done, timeout)
   assert.is_true(ok)
 end
 
+local function run_command(command)
+  local result = vim.system(command, { text = true }):wait()
+  assert.are.same(0, result.code)
+  return result.stdout or ''
+end
+
+local function unload_ollama_model(model)
+  run_command {
+    'curl',
+    '--silent',
+    '--show-error',
+    '--request',
+    'POST',
+    '--header',
+    'Content-Type: application/json',
+    '--data',
+    string.format('{"model":"%s","keep_alive":0}', model),
+    'http://127.0.0.1:11434/api/generate',
+  }
+end
+
 describe('ollama provider integration', function()
   before_each(function()
     ai_provider.setup(config)
@@ -78,7 +99,7 @@ describe('ollama provider integration', function()
     ai_provider.chat('ollama', {
       model = 'gemma4:e2b 32k',
       prompt = 'Reply with exactly: ok',
-      max_tokens = 4,
+      max_tokens = 256,
       timeout = 10000,
       callback = function(result, result_meta)
         message = result
@@ -105,7 +126,7 @@ describe('ollama provider integration', function()
     ai_provider.chat('ollama', {
       model = 'gemma4:e2b',
       prompt = 'Reply with exactly: ok',
-      max_tokens = 4,
+      max_tokens = 16,
       timeout = 10000,
       on_chunk = function(chunk)
         table.insert(chunks, chunk)
@@ -122,5 +143,42 @@ describe('ollama provider integration', function()
     assert.are.same('ok', message)
     assert.is_true(#chunks > 0)
     assert.are.same('ok', table.concat(chunks, ''))
+  end)
+
+  it('returns an error when the prompt exceeds a small loaded context window', function()
+    unload_ollama_model 'gemma4:e2b'
+
+    local done = false
+    ---@type string|nil
+    local message = 'unset'
+    ---@type table|nil
+    local meta = nil
+    local prompt = table.concat(vim.fn['repeat']({ 'context-overflow-token' }, 5000), ' ')
+
+    ai_provider.chat('ollama', {
+      model = 'gemma4:e2b',
+      prompt = prompt,
+      context_size = 2048,
+      max_tokens = 32,
+      timeout = 60000,
+      callback = function(result, result_meta)
+        message = result
+        meta = result_meta
+        done = true
+      end,
+    })
+
+    wait_for(function()
+      return done
+    end, 70000)
+
+    local ps = run_command { 'ollama', 'ps' }
+    assert.matches('gemma4:e2b', ps)
+    assert.matches('%s2048%s', ps)
+    assert.is_nil(message)
+    assert.is_table(meta)
+    ---@cast meta table
+    assert.are.same('length', meta.done_reason)
+    assert.matches('length limit', meta.error)
   end)
 end)

@@ -8,6 +8,9 @@ local CONFIG = {
   -- Use :AIProvider to configure the local provider; this is only the remote fallback model.
   model = nil, -- nil = auto (use Copilot's default)
   model_name = nil, -- Friendly display name for selected model
+  local_provider = 'ollama',
+  local_model = 'gemma4:e2b 64k',
+  local_model_name = 'gemma4:e2b 64k',
 
   openrouter = {
     endpoint = 'https://openrouter.ai/api/v1',
@@ -116,10 +119,19 @@ local function load_preferences()
     if ok and type(prefs) == 'table' then
       CONFIG.provider = prefs.provider or 'copilot'
       CONFIG.model = prefs.model
+      CONFIG.local_provider = prefs.local_provider or CONFIG.local_provider
+      CONFIG.local_model = prefs.local_model or CONFIG.local_model
       if type(prefs.model_name) == 'string' and prefs.model_name ~= '' then
         CONFIG.model_name = prefs.model_name
       else
         CONFIG.model_name = nil
+      end
+      if type(prefs.local_model_name) == 'string' and prefs.local_model_name ~= '' then
+        CONFIG.local_model_name = prefs.local_model_name
+      elseif type(CONFIG.local_model) == 'string' and CONFIG.local_model ~= '' then
+        CONFIG.local_model_name = CONFIG.local_model
+      else
+        CONFIG.local_model_name = nil
       end
     end
   end
@@ -136,6 +148,9 @@ local function save_preferences()
     provider = CONFIG.provider,
     model = CONFIG.model,
     model_name = CONFIG.model_name,
+    local_provider = CONFIG.local_provider,
+    local_model = CONFIG.local_model,
+    local_model_name = CONFIG.local_model_name,
   }
   local file = io.open(prefs_file, 'w')
   if file then
@@ -225,11 +240,12 @@ end
 local function complete_ollama(full_prompt, callback, status_callback, request_context)
   local log = setup_logger()
   local ai_provider = require 'ai-provider'
-  local model = ai_provider.get_selected_model 'ollama'
+  local provider = CONFIG.local_provider or 'ollama'
+  local model = CONFIG.local_model or ai_provider.get_selected_model(provider)
 
   if not model then
-    log.error 'Ollama is reachable but no model is selected'
-    vim.notify('No Ollama model selected. Run :AIProvider ollama model first.', vim.log.levels.ERROR)
+    log.error(provider .. ' is reachable but no model is selected')
+    vim.notify('No ' .. provider .. ' model selected. Run AI commit model selection first.', vim.log.levels.ERROR)
     callback(nil, nil)
     return
   end
@@ -238,21 +254,60 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
     status_callback('Waiting for response from ' .. model)
   end
 
-  ai_provider.chat('ollama', {
+  local function report_provider_status(status)
+    if not status_callback or type(status) ~= 'table' then
+      return
+    end
+
+    local status_model = status.model or model
+    if status.phase == 'loading' then
+      status_callback('Loading model ' .. status_model)
+    elseif status.phase == 'loaded' then
+      status_callback('Loaded model ' .. status_model)
+    elseif status.phase == 'thinking' then
+      local token_suffix = status.tokens and (' (' .. status.tokens .. ' tokens)') or ''
+      status_callback('Thinking with ' .. status_model .. token_suffix)
+    elseif status.phase == 'generating' then
+      local token_suffix = status.tokens and (' (' .. status.tokens .. ' tokens)') or ''
+      status_callback('Generating response with ' .. status_model .. token_suffix)
+    elseif status.phase == 'error' then
+      status_callback('Provider error from ' .. status_model)
+    end
+  end
+
+  ai_provider.chat(provider, {
     model = model,
     prompt = full_prompt,
     stream = true,
+    preload = true,
     max_tokens = CONFIG.max_tokens,
     is_cancelled = request_context and request_context.is_cancelled,
     register_http_job = request_context and request_context.register_http_job,
+    on_status = report_provider_status,
     callback = function(message, meta)
       if request_context and request_context.is_cancelled and request_context.is_cancelled() then
         return
       end
 
       if not message then
-        log.error 'Ollama chat request failed'
-        vim.notify('Ollama request failed. See ai-commit logs.', vim.log.levels.ERROR)
+        local error_message = meta and meta.error or 'unknown error'
+        local details = ''
+        if meta then
+          details = string.format(
+            ' (requested_model=%s used_model=%s done_reason=%s elapsed_ms=%s load_ms=%s prompt_eval_count=%s prompt_eval_ms=%s eval_count=%s eval_ms=%s)',
+            tostring(meta.requested_model),
+            tostring(meta.used_model),
+            tostring(meta.done_reason),
+            tostring(meta.elapsed_ms),
+            meta.load_duration and string.format('%.0f', meta.load_duration / 1e6) or 'nil',
+            tostring(meta.prompt_eval_count),
+            meta.prompt_eval_duration and string.format('%.0f', meta.prompt_eval_duration / 1e6) or 'nil',
+            tostring(meta.eval_count),
+            meta.eval_duration and string.format('%.0f', meta.eval_duration / 1e6) or 'nil'
+          )
+        end
+        log.error(provider .. ' chat request failed: ' .. error_message .. details)
+        vim.notify(provider .. ' request failed: ' .. error_message .. '. See ai-commit logs.', vim.log.levels.ERROR)
         callback(nil, nil)
         return
       end
@@ -260,7 +315,7 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
       local cleaned = clean_message(message)
       local used_model = meta and meta.used_model or model
       local elapsed_ms = meta and meta.elapsed_ms or 0
-      log.info(string.format('Generated commit message with Ollama (took %.0fms, model=%s)', elapsed_ms, used_model))
+      log.info(string.format('Generated commit message with %s (took %.0fms, model=%s)', provider, elapsed_ms, used_model))
       callback(cleaned, { requested_model = model, used_model = used_model })
     end,
   })
@@ -804,17 +859,18 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
   log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
 
   local ai_provider = require 'ai-provider'
+  local local_provider = CONFIG.local_provider or 'ollama'
   if status_callback then
-    status_callback 'Checking Ollama'
+    status_callback('Checking ' .. local_provider)
   end
 
-  ai_provider.check('ollama', function(working)
+  ai_provider.check(local_provider, function(working)
     if request_context and request_context.is_cancelled and request_context.is_cancelled() then
       return
     end
 
     if working then
-      log.info 'Routing commit message generation to Ollama'
+      log.info('Routing commit message generation to ' .. local_provider)
       complete_ollama(full_prompt, callback, status_callback, request_context)
       return
     end
@@ -869,6 +925,26 @@ local function get_copilot_models()
   }
 
   return fallback_models
+end
+
+local function select_local_model()
+  local log = setup_logger()
+  local ai_provider = require 'ai-provider'
+
+  ai_provider.select_helper({
+    prompt = 'Select AI commit model:',
+    current = { provider = CONFIG.local_provider, model = CONFIG.local_model },
+  }, function(choice)
+    if not choice then
+      return
+    end
+
+    CONFIG.local_provider = choice.provider
+    CONFIG.local_model = choice.model
+    CONFIG.local_model_name = choice.model
+    log.info('AI commit local model changed to: ' .. choice.label)
+    save_preferences()
+  end)
 end
 
 --- Select and save a model from multiple providers
@@ -1320,6 +1396,16 @@ end
 return {
   'nvim-lua/plenary.nvim',
   ft = 'gitcommit',
+  cmd = { 'AICommit', 'AICommitModel' },
+  keys = {
+    {
+      '<leader>psc',
+      function()
+        select_local_model()
+      end,
+      desc = 'AI [P]rovider [S]elect [C]ommit',
+    },
+  },
 
   config = function()
     -- Load saved model preference
@@ -1347,6 +1433,10 @@ return {
 
     vim.api.nvim_create_user_command('AICommit', insert_ai_commit_message, {
       desc = 'Generate AI commit message',
+    })
+
+    vim.api.nvim_create_user_command('AICommitModel', select_local_model, {
+      desc = 'Select AI commit model',
     })
 
   end,

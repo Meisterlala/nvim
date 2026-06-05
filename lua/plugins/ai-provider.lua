@@ -11,6 +11,7 @@ return {
       ollama = {
         default_model = 'gemma4:e2b',
         context_size = 1024 * 8,
+        load_timeout = 120000,
         keep_alive = '4h',
         models = {
           ['gemma4:e2b 32k'] = {
@@ -20,6 +21,15 @@ return {
           ['gemma4:e2b 64k'] = {
             model = 'gemma4:e2b',
             context_size = 1024 * 64,
+          },
+          ['qwen3.5:4b 128k'] = {
+            model = 'qwen3.5:4b',
+            context_size = 1024 * 128,
+          },
+          ['qwen3.5:4b 256k'] = {
+            model = 'qwen3.5:4b',
+            context_size = 1024 * 256,
+            think = false,
           },
         },
       },
