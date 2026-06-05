@@ -1,4 +1,4 @@
---- AI-powered Git commit message generator using Ollama, GitHub Copilot, or OpenRouter
+--- AI-powered Git commit message generator using ai-provider or OpenRouter
 
 -- Configuration - Change these to customize behavior
 local CONFIG = {
@@ -26,9 +26,6 @@ local CONFIG = {
   log_level = 'warn',
 }
 
--- Constants
-local COPILOT_AUTH_URL = 'https://api.github.com/copilot_internal/v2/token'
-local COPILOT_API_ENDPOINT = 'https://api.githubcopilot.com'
 local SPINNER_FRAMES = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
 local AI_PROVIDER_SOURCE_ID = 'ai-commit'
 
@@ -85,8 +82,6 @@ Generate ONLY the commit message following the specification above:]]
 
 -- State
 local state = {
-  copilot_token = nil,
-  oauth_token = nil,
   ns_id = nil,
   log = nil,
   in_flight_buffers = {},
@@ -321,173 +316,6 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
   })
 end
 
--- Try to get headers from Avante's copilot provider (so we don't maintain them)
-local function get_copilot_headers()
-  local ok, avante_copilot = pcall(require, 'avante.providers.copilot')
-  if ok and avante_copilot and avante_copilot.build_headers then
-    -- Use Avante's headers by calling its build_headers method
-    local success, headers = pcall(avante_copilot.build_headers, avante_copilot)
-    if success and headers then
-      -- Remove Authorization since we'll add our own
-      headers['Authorization'] = nil
-      return headers
-    end
-  end
-
-  -- Fallback headers if Avante is not available
-  return {
-    ['User-Agent'] = 'GitHubCopilotChat/0.26.7',
-    ['Editor-Version'] = 'vscode/1.105.1',
-    ['Editor-Plugin-Version'] = 'copilot-chat/0.26.7',
-    ['Copilot-Integration-Id'] = 'vscode-chat',
-  }
-end
-
---- Find GitHub Copilot config directory
----@return string
-local function get_copilot_config_dir()
-  local xdg_config = vim.fn.expand '$XDG_CONFIG_HOME'
-
-  if xdg_config and vim.fn.isdirectory(xdg_config) > 0 then
-    return xdg_config
-  elseif vim.fn.has 'unix' == 1 then
-    return vim.fn.expand '~/.config'
-  else
-    return vim.fn.expand '~/AppData/Local'
-  end
-end
-
---- Get OAuth token from Copilot config files
----@return string|nil
-local function get_oauth_token()
-  local log = setup_logger()
-
-  if state.oauth_token then
-    log.debug 'Using cached OAuth token'
-    return state.oauth_token
-  end
-
-  log.debug 'Searching for Copilot OAuth token'
-  local Path = require 'plenary.path'
-  local config_dir = get_copilot_config_dir()
-  log.debug('Config directory: ' .. config_dir)
-
-  for _, filename in ipairs { 'hosts.json', 'apps.json' } do
-    local token_path = Path:new(config_dir):joinpath('github-copilot', filename)
-    log.debug('Checking: ' .. token_path:absolute())
-
-    if token_path:exists() then
-      local ok, data = pcall(vim.json.decode, token_path:read())
-      if ok then
-        for key, value in pairs(data) do
-          if key:match 'github.com' and value.oauth_token then
-            state.oauth_token = value.oauth_token
-            log.info('Found OAuth token in ' .. filename)
-            return state.oauth_token
-          end
-        end
-      else
-        log.warn('Failed to parse ' .. filename)
-      end
-    end
-  end
-
-  log.error 'Copilot OAuth token not found'
-  -- vim.notify('Copilot OAuth token not found. Please authenticate with Copilot.', vim.log.levels.ERROR)
-  return nil
-end
-
---- Exchange OAuth token for Copilot API token (async)
----@param callback function(string|nil)
----@param request_context table|nil
-local function get_api_token_async(callback, request_context)
-  local log = setup_logger()
-
-  local function is_cancelled()
-    return request_context and request_context.is_cancelled and request_context.is_cancelled()
-  end
-
-  local function register_http_job(job)
-    if request_context and request_context.register_http_job then
-      request_context.register_http_job(job)
-    end
-  end
-
-  -- Return cached token if still valid
-  if state.copilot_token and state.copilot_token.expires_at > os.time() then
-    log.debug 'Using cached API token'
-    if is_cancelled() then
-      return
-    end
-    callback(state.copilot_token.token)
-    return
-  end
-
-  local oauth_token = get_oauth_token()
-  if not oauth_token then
-    callback(nil)
-    return
-  end
-
-  log.info 'Exchanging OAuth token for API token'
-  local curl = require 'plenary.curl'
-
-  local job = curl.get(COPILOT_AUTH_URL, {
-    headers = {
-      ['Authorization'] = 'token ' .. oauth_token,
-      ['Accept'] = 'application/json',
-    },
-    timeout = 5000,
-    callback = vim.schedule_wrap(function(response)
-      if is_cancelled() then
-        log.debug 'Ignoring Copilot auth response for cancelled request'
-        return
-      end
-
-      if response.status ~= 200 then
-        local response_body = format_body_for_log(response.body)
-        log.error(string.format('Failed to authenticate with Copilot: %d body=%s', response.status, response_body))
-        vim.notify('Copilot authentication failed (' .. response.status .. '). See ai-commit logs for response body.', vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-
-      local ok, decoded = pcall(vim.json.decode, response.body)
-      if not ok or type(decoded) ~= 'table' then
-        log.error('Failed to parse Copilot auth response body=' .. format_body_for_log(response.body))
-        vim.notify('Failed to parse Copilot authentication response. See ai-commit logs.', vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-
-      if not decoded.token or not decoded.expires_at then
-        log.error('Copilot auth response missing required fields body=' .. format_body_for_log(response.body))
-        vim.notify('Copilot authentication response was incomplete. See ai-commit logs.', vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-
-      state.copilot_token = decoded
-      local expires_in = state.copilot_token.expires_at - os.time()
-      log.info(string.format('API token acquired (expires in %ds)', expires_in))
-      callback(state.copilot_token.token)
-    end),
-    on_error = vim.schedule_wrap(function(err)
-      if is_cancelled() then
-        log.debug 'Copilot auth request cancelled'
-        return
-      end
-
-      local stderr = err and err.stderr or '<no stderr>'
-      log.error('Copilot auth request failed: ' .. tostring(stderr))
-      vim.notify('Copilot authentication request failed. See ai-commit logs.', vim.log.levels.ERROR)
-      callback(nil)
-    end),
-  })
-
-  register_http_job(job)
-end
-
 -- Git Operations
 
 --- Get git comment character
@@ -625,98 +453,53 @@ end
 ---@param request_context table|nil
 local function complete_copilot(full_prompt, callback, status_callback, request_context)
   local log = setup_logger()
+  local ai_provider = require 'ai-provider'
+  local model = CONFIG.model or ai_provider.get_selected_model('copilot', AI_PROVIDER_SOURCE_ID) or 'auto'
 
-  local function is_cancelled()
-    return request_context and request_context.is_cancelled and request_context.is_cancelled()
+  if status_callback then
+    status_callback('Waiting for response from ' .. model)
   end
 
-  local function register_http_job(job)
-    if request_context and request_context.register_http_job then
-      request_context.register_http_job(job)
-    end
-  end
+  ai_provider.chat('copilot', {
+    model = model,
+    prompt = full_prompt,
+    stream = false,
+    max_tokens = CONFIG.max_tokens,
+    timeout = CONFIG.chat_timeout,
+    is_cancelled = request_context and request_context.is_cancelled,
+    register_http_job = request_context and request_context.register_http_job,
+    on_status = function(status)
+      if not status_callback or type(status) ~= 'table' then
+        return
+      end
+      if status.phase == 'authenticating' then
+        status_callback 'Authenticating with Copilot'
+      elseif status.phase == 'generating' then
+        status_callback('Generating response with ' .. (status.model or model))
+      elseif status.phase == 'error' then
+        status_callback 'Provider error from Copilot'
+      end
+    end,
+    callback = function(message, meta)
+      if request_context and request_context.is_cancelled and request_context.is_cancelled() then
+        return
+      end
 
-  local function report_status(message)
-    if status_callback then
-      status_callback(message)
-    end
-  end
-
-  report_status 'Authenticating with Copilot'
-
-  get_api_token_async(function(token)
-    if is_cancelled() then
-      return
-    end
-
-    if not token then
-      callback(nil, nil)
-      return
-    end
-
-    local curl = require 'plenary.curl'
-    local endpoint = (state.copilot_token.endpoints and state.copilot_token.endpoints.api) or COPILOT_API_ENDPOINT
-
-    local start_time = vim.uv.hrtime()
-    local headers = get_copilot_headers()
-    headers['Authorization'] = 'Bearer ' .. token
-    headers['Content-Type'] = 'application/json'
-
-    local request_body = {
-      messages = { { role = 'user', content = full_prompt } },
-      stream = false,
-      max_tokens = CONFIG.max_tokens,
-    }
-
-    if CONFIG.model then
-      request_body.model = CONFIG.model
-    end
-
-    local model_display = CONFIG.model or 'auto'
-    report_status('Waiting for response from ' .. model_display)
-
-    local job = curl.post(endpoint .. '/chat/completions', {
-      headers = headers,
-      body = vim.json.encode(request_body),
-      timeout = CONFIG.chat_timeout,
-      callback = vim.schedule_wrap(function(response)
-        if is_cancelled() then
-          return
-        end
-
-        local elapsed_ms = (vim.uv.hrtime() - start_time) / 1e6
-
-        if response.status ~= 200 then
-          local response_body = format_body_for_log(response.body)
-          log.error(string.format('Copilot API error: %d (took %.0fms) body=%s', response.status, elapsed_ms, response_body))
-          vim.notify('Copilot API request failed (' .. response.status .. '). See ai-commit logs.', vim.log.levels.ERROR)
-          callback(nil, nil)
-          return
-        end
-
-        local ok, data = pcall(vim.json.decode, response.body)
-        if not ok or not data.choices or not data.choices[1] or not data.choices[1].message then
-          log.error('Failed to parse Copilot response body=' .. format_body_for_log(response.body))
-          callback(nil, nil)
-          return
-        end
-
-        local message = clean_message(data.choices[1].message.content)
-        local used_model = data.model or request_body.model or 'auto'
-        log.info(string.format('Generated commit message (took %.0fms, model=%s)', elapsed_ms, used_model))
-        callback(message, { requested_model = model_display, used_model = used_model })
-      end),
-      on_error = vim.schedule_wrap(function(err)
-        if is_cancelled() then
-          return
-        end
-        log.error('Copilot chat request failed: ' .. tostring(err and err.stderr or 'unknown error'))
+      if not message then
+        local error_message = meta and meta.error or 'unknown error'
+        log.error('Copilot chat request failed through ai-provider: ' .. error_message)
+        vim.notify('Copilot request failed: ' .. error_message .. '. See ai-commit logs.', vim.log.levels.ERROR)
         callback(nil, nil)
-      end),
-    })
+        return
+      end
 
-    register_http_job(job)
-  end, request_context)
+      local cleaned = clean_message(message)
+      local used_model = meta and meta.used_model or model
+      local elapsed_ms = meta and meta.elapsed_ms or 0
+      log.info(string.format('Generated commit message with Copilot via ai-provider (took %.0fms, model=%s)', elapsed_ms, used_model))
+      callback(cleaned, { requested_model = model, used_model = used_model })
+    end,
+  })
 end
 
 --- Completion for OpenRouter
@@ -885,129 +668,12 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
   end)
 end
 
-local function get_copilot_models()
-  local log = setup_logger()
-
-  -- Try to use Avante's model list if available
-  local ok, avante_copilot = pcall(require, 'avante.providers.copilot')
-  if ok and avante_copilot and avante_copilot.list_models then
-    log.info 'Getting models from Avante copilot provider'
-    local success, models = pcall(avante_copilot.list_models, avante_copilot)
-    if success and models and #models > 0 then
-      log.info(string.format('Got %d models from Avante', #models))
-
-      -- Filter out disabled models
-      local filtered = {}
-      for _, model in ipairs(models) do
-        local is_disabled = false
-        if model.policy and type(model.policy) == 'table' then
-          local s = model.policy.state
-          if s == 'disabled' or s == 'unconfigured' then
-            is_disabled = true
-          end
-        elseif model.policy == false then
-          is_disabled = true
-        end
-
-        if not is_disabled then
-          table.insert(filtered, model)
-        end
-      end
-
-      return filtered
-    end
-  end
-
-  log.info 'Using fallback model list'
-  local fallback_models = {
-    { id = 'gpt-4o-2024-11-20', name = 'GPT-4o' },
-    { id = 'gpt-4o-mini', name = 'GPT-4o Mini' },
-    { id = 'gpt-4o', name = 'GPT-4o' },
-  }
-
-  return fallback_models
-end
-
 local function select_local_model()
   local log = setup_logger()
   local ai_provider = require 'ai-provider'
 
   log.info('Opening AI provider model picker for source=' .. AI_PROVIDER_SOURCE_ID)
   ai_provider.select_source_model(AI_PROVIDER_SOURCE_ID)
-end
-
---- Select and save a model from multiple providers
-local function select_model()
-  local log = setup_logger()
-  local model_fetcher = require 'model_fetcher'
-
-  local all_models = {}
-
-  -- 1. Get Copilot models
-  local copilot_models = get_copilot_models()
-  for _, m in ipairs(copilot_models) do
-    table.insert(all_models, {
-      id = m.id,
-      name = m.display_name or m.name or m.id,
-      provider = 'copilot',
-    })
-  end
-
-  -- Add Copilot auto option
-  table.insert(all_models, 1, { id = nil, name = 'Auto (use default)', provider = 'copilot' })
-
-  local function show_picker(models_to_show)
-    -- Sort models: provider first, then name
-    table.sort(models_to_show, function(a, b)
-      if a.provider ~= b.provider then
-        return a.provider < b.provider
-      end
-      return a.name < b.name
-    end)
-
-    vim.ui.select(models_to_show, {
-      prompt = 'Select AI Model:',
-      format_item = function(item)
-        local is_current = (item.id == CONFIG.model and item.provider == CONFIG.provider)
-          or (not item.id and not CONFIG.model and item.provider == CONFIG.provider)
-        local marker = is_current and '✓ ' or '  '
-        local provider_label = '[' .. item.provider:sub(1, 1):upper() .. item.provider:sub(2) .. '] '
-        local display = item.name
-        if item.id and item.id ~= item.name then
-          display = display .. ' (' .. item.id .. ')'
-        end
-        return marker .. provider_label .. display
-      end,
-    }, function(choice)
-      if not choice then
-        return
-      end
-
-      CONFIG.provider = choice.provider
-      CONFIG.model = choice.id
-      CONFIG.model_name = choice.name
-      if choice.provider == 'copilot' and not choice.id then
-        CONFIG.model_name = nil
-      end
-
-      log.info('Model changed to: ' .. get_selected_model_name())
-      save_preferences()
-    end)
-  end
-
-  -- 2. Fetch OpenRouter models and then show picker
-  model_fetcher.fetch_openrouter_models(function(or_models)
-    if or_models then
-      for _, m_id in ipairs(or_models) do
-        table.insert(all_models, {
-          id = m_id,
-          name = m_id,
-          provider = 'openrouter',
-        })
-      end
-    end
-    show_picker(all_models)
-  end)
 end
 
 -- UI - Spinner

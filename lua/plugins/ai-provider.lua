@@ -8,6 +8,9 @@ return {
   opts = {
     default_provider = 'ollama',
     providers = {
+      copilot = {
+        default_model = 'auto',
+      },
       ollama = {
         default_model = 'gemma4:e4b',
         context_size = 1024 * 8,

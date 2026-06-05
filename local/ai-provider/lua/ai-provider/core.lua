@@ -2,6 +2,7 @@ local M = {}
 local log = require 'ai-provider.log'
 
 local providers = {
+  copilot = require 'ai-provider.providers.copilot',
   ollama = require 'ai-provider.providers.ollama',
 }
 
