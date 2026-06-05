@@ -1,11 +1,11 @@
---- AI-powered Git commit message generator using GitHub Copilot
+--- AI-powered Git commit message generator using Ollama, GitHub Copilot, or OpenRouter
 
 -- Configuration - Change these to customize behavior
 local CONFIG = {
-  -- Provider can be 'copilot' or 'openrouter'
+  -- Fallback provider when Ollama is not reachable. Can be 'copilot' or 'openrouter'
   provider = 'copilot',
 
-  -- Use :AICommitModels to select a model
+  -- Use :AIProvider to configure the local provider; this is only the remote fallback model.
   model = nil, -- nil = auto (use Copilot's default)
   model_name = nil, -- Friendly display name for selected model
 
@@ -90,6 +90,8 @@ local state = {
   log = nil,
   in_flight_buffers = {},
 }
+
+local clean_message
 
 -- Get preferences file path
 local function get_preferences_file()
@@ -194,7 +196,9 @@ end
 ---@return string
 local function get_selected_model_name()
   local provider_prefix = ''
-  if CONFIG.provider == 'openrouter' then
+  if CONFIG.provider == 'ollama' then
+    provider_prefix = '[Ollama] '
+  elseif CONFIG.provider == 'openrouter' then
     provider_prefix = '[OpenRouter] '
   elseif CONFIG.provider == 'copilot' and CONFIG.model then
     provider_prefix = '[Copilot] '
@@ -211,6 +215,55 @@ local function get_selected_model_name()
     return 'Copilot default'
   end
   return 'Unknown'
+end
+
+--- Completion for local Ollama
+---@param full_prompt string
+---@param callback function(string|nil, table|nil)
+---@param status_callback function(string)|nil
+---@param request_context table|nil
+local function complete_ollama(full_prompt, callback, status_callback, request_context)
+  local log = setup_logger()
+  local ai_provider = require 'ai-provider'
+  local model = ai_provider.get_selected_model 'ollama'
+
+  if not model then
+    log.error 'Ollama is reachable but no model is selected'
+    vim.notify('No Ollama model selected. Run :AIProvider ollama model first.', vim.log.levels.ERROR)
+    callback(nil, nil)
+    return
+  end
+
+  if status_callback then
+    status_callback('Waiting for response from ' .. model)
+  end
+
+  ai_provider.chat('ollama', {
+    model = model,
+    prompt = full_prompt,
+    stream = true,
+    max_tokens = CONFIG.max_tokens,
+    is_cancelled = request_context and request_context.is_cancelled,
+    register_http_job = request_context and request_context.register_http_job,
+    callback = function(message, meta)
+      if request_context and request_context.is_cancelled and request_context.is_cancelled() then
+        return
+      end
+
+      if not message then
+        log.error 'Ollama chat request failed'
+        vim.notify('Ollama request failed. See ai-commit logs.', vim.log.levels.ERROR)
+        callback(nil, nil)
+        return
+      end
+
+      local cleaned = clean_message(message)
+      local used_model = meta and meta.used_model or model
+      local elapsed_ms = meta and meta.elapsed_ms or 0
+      log.info(string.format('Generated commit message with Ollama (took %.0fms, model=%s)', elapsed_ms, used_model))
+      callback(cleaned, { requested_model = model, used_model = used_model })
+    end,
+  })
 end
 
 -- Try to get headers from Avante's copilot provider (so we don't maintain them)
@@ -505,7 +558,7 @@ end
 --- Clean up AI-generated message
 ---@param message string
 ---@return string
-local function clean_message(message)
+clean_message = function(message)
   local result = message:gsub('^%s*```.-\n', ''):gsub('\n```%s*$', ''):gsub('^%s+', ''):gsub('%s+$', '')
   return result
 end
@@ -745,16 +798,34 @@ end
 ---@param request_context table|nil
 local function generate_commit_message_async(branch, recent_commits, diff, callback, status_callback, request_context)
   local log = setup_logger()
-  log.info(string.format('Starting commit message generation using %s provider', CONFIG.provider))
+  log.info 'Starting commit message generation'
 
   local full_prompt = string.format(COMMIT_PROMPT_TEMPLATE, branch, recent_commits, diff)
   log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
 
-  if CONFIG.provider == 'openrouter' then
-    complete_openrouter(full_prompt, callback, status_callback, request_context)
-  else
-    complete_copilot(full_prompt, callback, status_callback, request_context)
+  local ai_provider = require 'ai-provider'
+  if status_callback then
+    status_callback 'Checking Ollama'
   end
+
+  ai_provider.check('ollama', function(working)
+    if request_context and request_context.is_cancelled and request_context.is_cancelled() then
+      return
+    end
+
+    if working then
+      log.info 'Routing commit message generation to Ollama'
+      complete_ollama(full_prompt, callback, status_callback, request_context)
+      return
+    end
+
+    log.info(string.format('Ollama unavailable, falling back to %s provider', CONFIG.provider))
+    if CONFIG.provider == 'openrouter' then
+      complete_openrouter(full_prompt, callback, status_callback, request_context)
+    else
+      complete_copilot(full_prompt, callback, status_callback, request_context)
+    end
+  end)
 end
 
 local function get_copilot_models()
@@ -1278,8 +1349,5 @@ return {
       desc = 'Generate AI commit message',
     })
 
-    vim.api.nvim_create_user_command('AICommitModels', select_model, {
-      desc = 'Select Copilot model for commit messages',
-    })
   end,
 }
