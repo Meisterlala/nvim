@@ -5,6 +5,7 @@ local log = require 'ai-provider.log'
 local DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
 local HEALTH_CACHE_TTL = 30
 local DEFAULT_LOAD_TIMEOUT = 120000
+local STATUS_THROTTLE_MS = 100
 
 local state = {
   health = nil,
@@ -143,6 +144,9 @@ function M.chat(request)
   local metrics = {}
   local thinking_chars = 0
   local last_status_key = nil
+  local last_status_phase = nil
+  local last_status_sent_at = 0
+  local status_throttle_ms = request.status_interval or STATUS_THROTTLE_MS
   local generation_started_at = nil
   local streamed_token_estimate = 0
 
@@ -172,7 +176,17 @@ function M.chat(request)
     if key == last_status_key then
       return
     end
+
+    local now = vim.uv.hrtime()
+    local phase = status.phase or ''
+    local important = phase == 'loading' or phase == 'loaded' or phase == 'done' or phase == 'error' or phase ~= last_status_phase
+    if not important and (now - last_status_sent_at) / 1e6 < status_throttle_ms then
+      return
+    end
+
     last_status_key = key
+    last_status_phase = phase
+    last_status_sent_at = now
     log.debug(
       string.format(
         'ollama status phase=%s model=%s tokens_per_second=%s elapsed_ms=%.0f',

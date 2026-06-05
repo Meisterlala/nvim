@@ -65,6 +65,7 @@
 ---@field think? boolean Per-request Ollama thinking mode override.
 ---@field on_chunk? fun(chunk: string, raw: table) Called for each streamed text chunk.
 ---@field on_status? fun(status: AiProviderStatus) Called with standardized provider progress updates.
+---@field status_interval? integer Minimum milliseconds between same-phase status updates. Defaults to the provider's status throttle.
 ---@field callback? fun(message: string|nil, meta: AiProviderChatMeta|nil) Called once the request finishes.
 ---@field is_cancelled? fun(): boolean Optional cancellation predicate.
 ---@field register_http_job? fun(job: table) Receives the provider job/process for external cancellation.

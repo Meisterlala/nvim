@@ -271,6 +271,7 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
     is_cancelled = request_context and request_context.is_cancelled,
     register_http_job = request_context and request_context.register_http_job,
     on_status = report_provider_status,
+    status_interval = CONFIG.spinner_interval,
     callback = function(message, meta)
       if request_context and request_context.is_cancelled and request_context.is_cancelled() then
         return
