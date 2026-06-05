@@ -2,6 +2,7 @@
 
 ---@class AiProviderPreferences
 ---@field default_provider? string Default provider used by chat calls without an explicit provider.
+---@field sources? table<string, AiProviderSelection> Feature-specific provider/model preferences keyed by caller ID.
 ---@field [string] table Provider-specific preferences. Provider tables currently support `model`.
 
 ---@class AiProviderProviderConfig
@@ -13,14 +14,10 @@
 ---@field think? boolean Optional Ollama thinking mode override for reasoning models.
 ---@field models? table<string, string|AiProviderModelConfig> Optional logical model profiles. Keys are selectable model names.
 
----@class AiProviderHelperConfig
----@field provider string Provider name used by the helper.
----@field model string Model/profile name returned by the helper. This is a reference to the configured model name, not copied options.
+---@class AiProviderSelection
+---@field provider string Provider name.
+---@field model string Model/profile name. This is a reference to the configured model name, not copied options.
 ---@field label? string Display label, usually `provider/model`.
-
----@class AiProviderSelectHelperOptions
----@field prompt? string Picker prompt.
----@field current? AiProviderHelperConfig Current selection used for picker highlighting.
 
 ---@class AiProviderModelConfig
 ---@field model string Underlying provider model name.
@@ -55,6 +52,7 @@
 ---@field elapsed_ms? number Elapsed duration in milliseconds.
 
 ---@class AiProviderChatRequest
+---@field source_id? string Caller/source ID, for example `ai-commit`. Used for logging and source-specific model preferences.
 ---@field provider? string Provider name. Defaults to `get_default_provider()`.
 ---@field model? string Model name. Defaults to the selected model for the provider.
 ---@field prompt string User prompt to send to the provider.
@@ -76,27 +74,10 @@ local M = {}
 
 local core = require 'ai-provider.core'
 
----@return AiProviderPreferences prefs Saved provider preferences.
-function M.load_preferences()
-  return core.load_preferences()
-end
-
----@param prefs AiProviderPreferences
----@return boolean saved Whether preferences were written.
-function M.save_preferences(prefs)
-  return core.save_preferences(prefs)
-end
-
 ---@param name string Provider name, for example `ollama`.
 ---@return table|nil provider Active provider implementation table. Returns nil for known but unconfigured providers.
 function M.get_provider(name)
   return core.get_provider(name)
-end
-
----@param name string Provider name, for example `ollama`.
----@return table|nil provider Provider implementation table, even when not enabled by config.
-function M.get_provider_implementation(name)
-  return core.get_provider_implementation(name)
 end
 
 ---@param name string Provider name, for example `ollama`.
@@ -115,11 +96,6 @@ function M.get_default_provider()
   return core.get_default_provider()
 end
 
----@return string|nil provider Current/default provider name, or nil before valid setup.
-function M.get_current_provider()
-  return core.get_default_provider()
-end
-
 ---@param provider string Provider name.
 ---@return boolean saved Whether the provider was saved as default.
 function M.set_default_provider(provider)
@@ -127,21 +103,10 @@ function M.set_default_provider(provider)
 end
 
 ---@param provider string Provider name.
----@return boolean saved Whether the provider was saved as default.
-function M.set_provider(provider)
-  return core.set_default_provider(provider)
-end
-
----@param provider string Provider name.
+---@param source_id? string Caller/source ID.
 ---@return string|nil model Selected model for the provider.
-function M.get_selected_model(provider)
-  return core.get_selected_model(provider)
-end
-
----@param provider string Provider name.
----@return string|nil model Selected model for the provider.
-function M.get_model(provider)
-  return core.get_selected_model(provider)
+function M.get_selected_model(provider, source_id)
+  return core.get_selected_model(provider, source_id)
 end
 
 ---@param provider string Provider name.
@@ -151,11 +116,30 @@ function M.set_selected_model(provider, model)
   return core.set_selected_model(provider, model)
 end
 
+---@param source_id string Caller/source ID.
+---@return AiProviderSelection|nil selection Source-specific selection.
+function M.get_source_selection(source_id)
+  return core.get_source_selection(source_id)
+end
+
+---@param source_id string Caller/source ID.
 ---@param provider string Provider name.
 ---@param model string Model name.
----@return boolean saved Whether the model preference was saved.
-function M.set_model(provider, model)
-  return core.set_selected_model(provider, model)
+---@return boolean saved Whether the source preference was saved.
+function M.set_source_selection(source_id, provider, model)
+  return core.set_source_selection(source_id, provider, model)
+end
+
+---@return string[] sources Known source IDs.
+function M.list_sources()
+  return core.list_sources()
+end
+
+---@param source_id string Caller/source ID.
+---@param opts? AiProviderSelection Optional initial provider/model selection.
+---@return boolean saved Whether the source was registered.
+function M.register_source(source_id, opts)
+  return core.register_source(source_id, opts)
 end
 
 ---@param provider string Provider name.
@@ -200,12 +184,9 @@ function M.select_model(provider)
   return core.select_model(provider)
 end
 
----Open a model picker for feature-specific callers. This does not persist state;
----callers should save the returned provider/model reference themselves.
----@param opts? AiProviderSelectHelperOptions|fun(selection: AiProviderHelperConfig|nil)
----@param callback? fun(selection: AiProviderHelperConfig|nil) Called with the selected provider/model reference.
-function M.select_helper(opts, callback)
-  return core.select_helper(opts, callback)
+---@param source_id? string Caller/source ID. Omit to pick from known sources first.
+function M.select_source_model(source_id)
+  return core.select_source_model(source_id)
 end
 
 ---@param arglead string Current command-line argument prefix.
@@ -228,6 +209,8 @@ end
 ---- `:AIProvider` opens the all-provider model picker.
 ---- `:AIProvider model` opens the all-provider model picker.
 ---- `:AIProvider model provider/model` sets the default provider and that provider's default model.
+---- `:AIProvider sources` lists known caller/source IDs.
+---- `:AIProvider source <id> model [provider/model]` picks or sets the model for one caller/source ID.
 ---- `:AIProvider default [provider]` shows or sets the default provider.
 ---- `:AIProvider <provider> model [model]` picks or sets only that provider's default model.
 ---@param opts AiProviderConfig

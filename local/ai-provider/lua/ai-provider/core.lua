@@ -12,6 +12,14 @@ local state = {
   model_cache = {},
 }
 
+local function valid_source_id(source_id)
+  return type(source_id) == 'string' and source_id ~= ''
+end
+
+local function model_display(provider, model)
+  return provider .. '/' .. model
+end
+
 local function is_configured_provider(provider)
   return type(state.config.providers[provider]) == 'table'
 end
@@ -88,10 +96,6 @@ function M.get_provider(name)
   return providers[name]
 end
 
-function M.get_provider_implementation(name)
-  return providers[name]
-end
-
 function M.get_provider_config(name)
   if not is_configured_provider(name) then
     return nil
@@ -129,8 +133,19 @@ function M.set_default_provider(provider)
   return M.save_preferences(prefs)
 end
 
-function M.get_selected_model(provider)
+function M.get_selected_model(provider, source_id)
   local prefs = M.load_preferences()
+  if valid_source_id(source_id) then
+    local source = prefs.sources and prefs.sources[source_id]
+    if type(source) == 'table'
+      and source.provider == provider
+      and type(source.model) == 'string'
+      and source.model ~= ''
+    then
+      return source.model
+    end
+  end
+
   local provider_prefs = prefs[provider]
   if type(provider_prefs) == 'table' and type(provider_prefs.model) == 'string' and provider_prefs.model ~= '' then
     return provider_prefs.model
@@ -153,6 +168,71 @@ function M.set_selected_model(provider, model)
   prefs[provider] = prefs[provider] or {}
   prefs[provider].model = model
   return M.save_preferences(prefs)
+end
+
+function M.get_source_selection(source_id)
+  if not valid_source_id(source_id) then
+    return nil
+  end
+
+  local prefs = M.load_preferences()
+  local source = prefs.sources and prefs.sources[source_id]
+  if type(source) == 'table' and is_configured_provider(source.provider) and type(source.model) == 'string' and source.model ~= '' then
+    return { provider = source.provider, model = source.model, label = model_display(source.provider, source.model) }
+  end
+
+  local provider = M.get_default_provider()
+  local model = provider and M.get_selected_model(provider) or nil
+  if provider and model then
+    return { provider = provider, model = model, label = model_display(provider, model) }
+  end
+
+  return nil
+end
+
+function M.set_source_selection(source_id, provider, model)
+  if not valid_source_id(source_id) or not is_configured_provider(provider) or type(model) ~= 'string' or model == '' then
+    return false
+  end
+
+  local prefs = M.load_preferences()
+  prefs.sources = prefs.sources or {}
+  prefs.sources[source_id] = { provider = provider, model = model, label = model_display(provider, model) }
+  return M.save_preferences(prefs)
+end
+
+function M.register_source(source_id, opts)
+  if not valid_source_id(source_id) then
+    return false
+  end
+
+  opts = opts or {}
+  local prefs = M.load_preferences()
+  prefs.sources = prefs.sources or {}
+  if type(prefs.sources[source_id]) == 'table' then
+    return true
+  end
+
+  local provider = opts.provider or M.get_default_provider()
+  local model = opts.model or (provider and M.get_selected_model(provider) or nil)
+  if provider and model and is_configured_provider(provider) then
+    prefs.sources[source_id] = { provider = provider, model = model, label = model_display(provider, model) }
+  else
+    prefs.sources[source_id] = {}
+  end
+  return M.save_preferences(prefs)
+end
+
+function M.list_sources()
+  local prefs = M.load_preferences()
+  local sources = {}
+  for source_id in pairs(prefs.sources or {}) do
+    if type(source_id) == 'string' then
+      table.insert(sources, source_id)
+    end
+  end
+  table.sort(sources)
+  return sources
 end
 
 function M.check(provider, callback, opts)
@@ -223,20 +303,28 @@ function M.chat(first, second)
     return nil
   end
 
-  request.model = request.model or M.get_selected_model(provider)
+  request.model = request.model or M.get_selected_model(provider, request.source_id)
   request.provider_config = get_provider_config(provider)
   if not request.model then
-    log.error('chat requested without selected model for provider: ' .. tostring(provider))
+    log.error(
+      string.format('chat requested without selected model source=%s provider=%s', tostring(request.source_id), tostring(provider))
+    )
     if request.callback then
       request.callback(nil, nil)
     end
-    vim.notify('No model selected for ' .. provider .. '. Run :AIProvider ' .. provider .. ' model first.', vim.log.levels.ERROR)
+    local source_hint = valid_source_id(request.source_id) and ('source ' .. request.source_id .. ' ') or provider .. ' '
+    vim.notify('No model selected for ' .. source_hint .. '. Run :AIProvider source ' .. (request.source_id or '<id>') .. ' model first.', vim.log.levels.ERROR)
     return nil
+  end
+
+  if valid_source_id(request.source_id) then
+    M.set_source_selection(request.source_id, provider, request.model)
   end
 
   log.info(
     string.format(
-      'chat start provider=%s model=%s prompt_chars=%d max_tokens=%s context_size=%s stream=%s',
+      'chat start source=%s provider=%s model=%s prompt_chars=%d max_tokens=%s context_size=%s stream=%s',
+      tostring(request.source_id),
       provider,
       request.model,
       type(request.prompt) == 'string' and #request.prompt or 0,
@@ -250,10 +338,6 @@ end
 
 function M.chat_with(provider, request)
   return M.chat(provider, request)
-end
-
-local function model_display(provider, model)
-  return provider .. '/' .. model
 end
 
 local function collect_models(callback)
@@ -348,7 +432,7 @@ function M.select_model(provider)
   end, { force = true })
 end
 
-function M.select_helper(opts, callback)
+local function select_helper(opts, callback)
   if type(opts) == 'function' then
     callback = opts
     opts = {}
@@ -364,7 +448,7 @@ function M.select_helper(opts, callback)
       return
     end
 
-    local current = opts.current
+    local current = opts.current or (valid_source_id(opts.source_id) and M.get_source_selection(opts.source_id) or nil)
     vim.ui.select(models, {
       prompt = opts.prompt or 'Select AI provider model:',
       format_item = function(item)
@@ -387,7 +471,42 @@ function M.select_helper(opts, callback)
   end)
 end
 
-local global_actions = { 'default', 'model', 'models' }
+function M.select_source_model(source_id)
+  if valid_source_id(source_id) then
+    select_helper({
+      prompt = 'Select AI model for ' .. source_id .. ':',
+      source_id = source_id,
+    }, function(choice)
+      if not choice then
+        return
+      end
+      M.set_source_selection(source_id, choice.provider, choice.model)
+      vim.notify('AI model for ' .. source_id .. ' set to ' .. choice.label, vim.log.levels.INFO)
+    end)
+    return
+  end
+
+  local sources = M.list_sources()
+  if #sources == 0 then
+    vim.notify('No AI provider sources have been seen yet.', vim.log.levels.WARN)
+    return
+  end
+
+  vim.ui.select(sources, {
+    prompt = 'Select AI provider source:',
+    format_item = function(item)
+      local selection = M.get_source_selection(item)
+      local suffix = selection and (' (' .. selection.label .. ')') or ''
+      return item .. suffix
+    end,
+  }, function(choice)
+    if choice then
+      M.select_source_model(choice)
+    end
+  end)
+end
+
+local global_actions = { 'default', 'model', 'models', 'source', 'sources' }
 local provider_actions = { 'auth', 'check', 'model', 'models' }
 
 local function starts_with(value, prefix)
@@ -440,6 +559,30 @@ function M.command_complete(arglead, cmdline)
     return {}
   end
 
+  if first_arg == 'sources' then
+    return {}
+  end
+
+  if first_arg == 'source' then
+    if argc == 2 then
+      return filter(M.list_sources(), arglead)
+    end
+    if argc == 3 then
+      return filter({ 'model' }, arglead)
+    end
+    if parts[4] == 'model' then
+      local cached = {}
+      for _, provider in ipairs(M.list_providers()) do
+        for _, model in ipairs(state.model_cache[provider] or {}) do
+          table.insert(cached, model_display(provider, model))
+        end
+      end
+      table.sort(cached)
+      return filter(cached, arglead)
+    end
+    return {}
+  end
+
   if not providers[first_arg] then
     return {}
   end
@@ -489,6 +632,43 @@ function M.run_command(args)
       end, models)
       print_lines(lines)
     end)
+    return
+  end
+
+  if args[1] == 'sources' then
+    local lines = vim.tbl_map(function(source_id)
+      local selection = M.get_source_selection(source_id)
+      local suffix = selection and (' ' .. selection.label) or ''
+      return source_id .. suffix
+    end, M.list_sources())
+    print_lines(lines)
+    return
+  end
+
+  if args[1] == 'source' then
+    local source_id = args[2]
+    if not valid_source_id(source_id) then
+      vim.notify('Expected source ID, for example :AIProvider source ai-commit model', vim.log.levels.ERROR)
+      return
+    end
+
+    local action = args[3] or 'model'
+    if action ~= 'model' then
+      vim.notify('Unknown AIProvider source action: ' .. action, vim.log.levels.ERROR)
+      return
+    end
+
+    if args[4] then
+      local provider, model = args[4]:match '^([^/]+)/(.+)$'
+      if not provider or not model or not is_configured_provider(provider) then
+        vim.notify('Expected source model as provider/model, for example ollama/gemma4:e2b', vim.log.levels.ERROR)
+        return
+      end
+      M.set_source_selection(source_id, provider, model)
+      vim.notify('AI model for ' .. source_id .. ' set to ' .. model_display(provider, model), vim.log.levels.INFO)
+    else
+      M.select_source_model(source_id)
+    end
     return
   end
 

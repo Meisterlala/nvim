@@ -8,10 +8,6 @@ local CONFIG = {
   -- Use :AIProvider to configure the local provider; this is only the remote fallback model.
   model = nil, -- nil = auto (use Copilot's default)
   model_name = nil, -- Friendly display name for selected model
-  local_provider = 'ollama',
-  local_model = 'gemma4:e2b 64k',
-  local_model_name = 'gemma4:e2b 64k',
-
   openrouter = {
     endpoint = 'https://openrouter.ai/api/v1',
     -- API key is checked in the following environment variables:
@@ -33,6 +29,7 @@ local CONFIG = {
 local COPILOT_AUTH_URL = 'https://api.github.com/copilot_internal/v2/token'
 local COPILOT_API_ENDPOINT = 'https://api.githubcopilot.com'
 local SPINNER_FRAMES = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+local AI_PROVIDER_SOURCE_ID = 'ai-commit'
 
 local COMMIT_PROMPT_TEMPLATE = [[You are a git commit message generator following Conventional Commits v1.0.0 specification.
 
@@ -119,19 +116,10 @@ local function load_preferences()
     if ok and type(prefs) == 'table' then
       CONFIG.provider = prefs.provider or 'copilot'
       CONFIG.model = prefs.model
-      CONFIG.local_provider = prefs.local_provider or CONFIG.local_provider
-      CONFIG.local_model = prefs.local_model or CONFIG.local_model
       if type(prefs.model_name) == 'string' and prefs.model_name ~= '' then
         CONFIG.model_name = prefs.model_name
       else
         CONFIG.model_name = nil
-      end
-      if type(prefs.local_model_name) == 'string' and prefs.local_model_name ~= '' then
-        CONFIG.local_model_name = prefs.local_model_name
-      elseif type(CONFIG.local_model) == 'string' and CONFIG.local_model ~= '' then
-        CONFIG.local_model_name = CONFIG.local_model
-      else
-        CONFIG.local_model_name = nil
       end
     end
   end
@@ -148,9 +136,6 @@ local function save_preferences()
     provider = CONFIG.provider,
     model = CONFIG.model,
     model_name = CONFIG.model_name,
-    local_provider = CONFIG.local_provider,
-    local_model = CONFIG.local_model,
-    local_model_name = CONFIG.local_model_name,
   }
   local file = io.open(prefs_file, 'w')
   if file then
@@ -240,12 +225,13 @@ end
 local function complete_ollama(full_prompt, callback, status_callback, request_context)
   local log = setup_logger()
   local ai_provider = require 'ai-provider'
-  local provider = CONFIG.local_provider or 'ollama'
-  local model = CONFIG.local_model or ai_provider.get_selected_model(provider)
+  local selection = ai_provider.get_source_selection(AI_PROVIDER_SOURCE_ID)
+  local provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
+  local model = selection and selection.model or ai_provider.get_selected_model(provider, AI_PROVIDER_SOURCE_ID)
 
   if not model then
-    log.error(provider .. ' is reachable but no model is selected')
-    vim.notify('No ' .. provider .. ' model selected. Run AI commit model selection first.', vim.log.levels.ERROR)
+    log.error('No AI provider model selected for source=' .. AI_PROVIDER_SOURCE_ID .. ' provider=' .. provider)
+    vim.notify('No AI commit model selected. Run :AIProvider source ai-commit model first.', vim.log.levels.ERROR)
     callback(nil, nil)
     return
   end
@@ -276,6 +262,7 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
   end
 
   ai_provider.chat(provider, {
+    source_id = AI_PROVIDER_SOURCE_ID,
     model = model,
     prompt = full_prompt,
     stream = true,
@@ -869,7 +856,8 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
   log.debug(string.format('Prompt built (branch=%s, commits=%d chars, diff=%d chars)', branch, #recent_commits, #diff))
 
   local ai_provider = require 'ai-provider'
-  local local_provider = CONFIG.local_provider or 'ollama'
+  local selection = ai_provider.get_source_selection(AI_PROVIDER_SOURCE_ID)
+  local local_provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
   if status_callback then
     status_callback('Checking ' .. local_provider)
   end
@@ -880,12 +868,12 @@ local function generate_commit_message_async(branch, recent_commits, diff, callb
     end
 
     if working then
-      log.info('Routing commit message generation to ' .. local_provider)
+      log.info('Routing commit message generation source=' .. AI_PROVIDER_SOURCE_ID .. ' provider=' .. local_provider)
       complete_ollama(full_prompt, callback, status_callback, request_context)
       return
     end
 
-    log.info(string.format('Ollama unavailable, falling back to %s provider', CONFIG.provider))
+    log.info(string.format('%s unavailable for source=%s, falling back to %s provider', local_provider, AI_PROVIDER_SOURCE_ID, CONFIG.provider))
     if CONFIG.provider == 'openrouter' then
       complete_openrouter(full_prompt, callback, status_callback, request_context)
     else
@@ -941,20 +929,8 @@ local function select_local_model()
   local log = setup_logger()
   local ai_provider = require 'ai-provider'
 
-  ai_provider.select_helper({
-    prompt = 'Select AI commit model:',
-    current = { provider = CONFIG.local_provider, model = CONFIG.local_model },
-  }, function(choice)
-    if not choice then
-      return
-    end
-
-    CONFIG.local_provider = choice.provider
-    CONFIG.local_model = choice.model
-    CONFIG.local_model_name = choice.model
-    log.info('AI commit local model changed to: ' .. choice.label)
-    save_preferences()
-  end)
+  log.info('Opening AI provider model picker for source=' .. AI_PROVIDER_SOURCE_ID)
+  ai_provider.select_source_model(AI_PROVIDER_SOURCE_ID)
 end
 
 --- Select and save a model from multiple providers
@@ -1422,7 +1398,15 @@ return {
     load_preferences()
 
     local log = setup_logger()
-    log.info('Using model: ' .. get_selected_model_name())
+    local ok, ai_provider = pcall(require, 'ai-provider')
+    if ok then
+      ai_provider.register_source(AI_PROVIDER_SOURCE_ID)
+      local selection = ai_provider.get_source_selection(AI_PROVIDER_SOURCE_ID)
+      if selection then
+        log.info('Using AI provider source=' .. AI_PROVIDER_SOURCE_ID .. ' model=' .. selection.label)
+      end
+    end
+    log.info('Using fallback model: ' .. get_selected_model_name())
 
     state.ns_id = vim.api.nvim_create_namespace 'ai_commit_spinner'
 

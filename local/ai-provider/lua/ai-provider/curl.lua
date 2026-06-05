@@ -2,10 +2,17 @@ local M = {}
 
 local DEFAULT_TIMEOUT = 30000
 
+local function unpack_values(values, index, last)
+  if index > last then
+    return
+  end
+  return values[index], unpack_values(values, index + 1, last)
+end
+
 local function schedule(callback, ...)
-  local args = { ... }
+  local args = { n = select('#', ...), ... }
   vim.schedule(function()
-    callback(unpack(args))
+    callback(unpack_values(args, 1, args.n))
   end)
 end
 

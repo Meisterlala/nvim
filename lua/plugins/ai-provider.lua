@@ -39,16 +39,16 @@ return {
     {
       '<leader>pm',
       function()
-        require('ai-provider').select_model()
+        require('ai-provider').select_source_model()
       end,
-      desc = 'AI [P]rovider [M]odel',
+      desc = 'AI [P]rovider Source [M]odel',
     },
     {
       '<leader>pM',
       function()
-        require('ai-provider').select_model 'ollama'
+        require('ai-provider').select_model()
       end,
-      desc = 'AI [P]rovider Ollama [M]odel',
+      desc = 'AI [P]rovider Default [M]odel',
     },
     {
       '<leader>pd',
