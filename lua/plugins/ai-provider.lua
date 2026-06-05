@@ -9,10 +9,10 @@ return {
     default_provider = 'ollama',
     providers = {
       ollama = {
-        default_model = 'gemma4:e2b',
+        default_model = 'gemma4:e4b',
         context_size = 1024 * 8,
         load_timeout = 120000,
-        keep_alive = '4h',
+        keep_alive = '1h',
         models = {
           ['gemma4:e2b 32k'] = {
             model = 'gemma4:e2b',
@@ -25,6 +25,7 @@ return {
           ['qwen3.5:4b 128k'] = {
             model = 'qwen3.5:4b',
             context_size = 1024 * 128,
+            think = false,
           },
           ['qwen3.5:4b 256k'] = {
             model = 'qwen3.5:4b',
