@@ -18,6 +18,7 @@ local CONFIG = {
 
   max_tokens = 10000, -- Max length of generated message
   spinner_interval = 80, -- Spinner animation speed (ms)
+  preview_lines = 5, -- Recycled stream preview lines under the spinner
   max_diff_chars = 100000, -- Truncate very large diffs before sending to model
   chat_timeout = 30000, -- Chat completion timeout (ms)
   model_highlight_group = 'Special', -- Highlight group for model name in spinner status
@@ -271,6 +272,7 @@ local function complete_ollama(full_prompt, callback, status_callback, request_c
     is_cancelled = request_context and request_context.is_cancelled,
     register_http_job = request_context and request_context.register_http_job,
     on_status = report_provider_status,
+    on_chunk = request_context and request_context.on_chunk,
     status_interval = CONFIG.spinner_interval,
     callback = function(message, meta)
       if request_context and request_context.is_cancelled and request_context.is_cancelled() then
@@ -1043,8 +1045,19 @@ local function start_spinner(bufnr)
     extmark_id = nil,
     status_text = 'Preparing commit message',
     status_chunks = { { 'Preparing commit message', 'Comment' } },
+    stream_preview = {},
     stop_timer = stop_timer_safe,
   }
+
+  local function preview_virt_lines()
+    local lines = {}
+
+    for _, line in ipairs(spinner.stream_preview) do
+      table.insert(lines, { { line, 'Comment' } })
+    end
+
+    return lines
+  end
 
   local frame_idx = 1
 
@@ -1070,12 +1083,20 @@ local function start_spinner(bufnr)
       table.insert(virt_text, { spinner.status_text, 'Comment' })
     end
 
-    spinner.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, {
+    local extmark_opts = {
       id = spinner.extmark_id,
       right_gravity = false,
       virt_text = virt_text,
       virt_text_pos = 'eol',
-    })
+    }
+
+    local virt_lines = preview_virt_lines()
+    if #virt_lines > 0 then
+      extmark_opts.virt_lines = virt_lines
+      extmark_opts.virt_lines_above = false
+    end
+
+    spinner.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, state.ns_id, row, col, extmark_opts)
 
     frame_idx = (frame_idx % #SPINNER_FRAMES) + 1
   end
@@ -1089,6 +1110,41 @@ local function start_spinner(bufnr)
   spinner.update = update_spinner
 
   return spinner
+end
+
+---@param lines string[]
+---@param text string
+---@param max_lines integer
+local function append_spinner_preview_lines(lines, text, max_lines)
+  if not text or text == '' then
+    return
+  end
+
+  local chunks = vim.split(text, '\n', { plain = true })
+  for index, chunk in ipairs(chunks) do
+    if index > 1 then
+      table.insert(lines, '')
+    elseif #lines == 0 then
+      table.insert(lines, '')
+    end
+
+    lines[#lines] = (lines[#lines] or '') .. chunk
+  end
+
+  while #lines > max_lines do
+    table.remove(lines, 1)
+  end
+end
+
+---@param spinner table|nil
+---@param text string
+---@param kind string|nil
+local function append_spinner_stream(spinner, text, kind)
+  if not spinner then
+    return
+  end
+
+  append_spinner_preview_lines(spinner.stream_preview, text, CONFIG.preview_lines or 5)
 end
 
 ---@param spinner table|nil
@@ -1190,6 +1246,13 @@ local function insert_ai_commit_message()
       return done or aborted
     end,
     register_http_job = register_http_job,
+    on_chunk = function(chunk, _raw, kind)
+      if done or aborted then
+        return
+      end
+
+      append_spinner_stream(spinner, chunk, kind)
+    end,
   }
 
   local context = {

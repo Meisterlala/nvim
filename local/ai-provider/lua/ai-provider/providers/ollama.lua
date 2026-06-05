@@ -269,6 +269,11 @@ function M.chat(request)
             message = 'Thinking',
             tokens_per_second = status_tokens_per_second,
           }
+          if request.on_chunk then
+            vim.schedule(function()
+              request.on_chunk(thinking, data, 'thinking')
+            end)
+          end
         end
         if chunk ~= '' then
           table.insert(chunks, chunk)
@@ -279,7 +284,7 @@ function M.chat(request)
           }
           if request.on_chunk then
             vim.schedule(function()
-              request.on_chunk(chunk, data)
+              request.on_chunk(chunk, data, 'message')
             end)
           end
         end

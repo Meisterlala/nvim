@@ -63,7 +63,7 @@
 ---@field load_timeout? integer Per-request model preload timeout in milliseconds.
 ---@field preload? boolean Whether to preload the model before chat. Defaults to false; callers such as ai-commit can enable it to exclude load time from chat timeout.
 ---@field think? boolean Per-request Ollama thinking mode override.
----@field on_chunk? fun(chunk: string, raw: table) Called for each streamed text chunk.
+---@field on_chunk? fun(chunk: string, raw: table, kind: string) Called for each streamed chunk. `kind` is `thinking` or `message`.
 ---@field on_status? fun(status: AiProviderStatus) Called with standardized provider progress updates.
 ---@field status_interval? integer Minimum milliseconds between same-phase status updates. Defaults to the provider's status throttle.
 ---@field callback? fun(message: string|nil, meta: AiProviderChatMeta|nil) Called once the request finishes.
