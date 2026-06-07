@@ -125,6 +125,8 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
       status_callback(action and (action .. ' with ' .. status_model) or ('Loading model ' .. status_model))
     elseif status.phase == 'loaded' then
       status_callback('Loaded model ' .. status_model)
+    elseif status.phase == 'context' then
+      status_callback('Loading prompt context with ' .. status_model)
     elseif status.phase == 'thinking' then
       local suffix = status.tokens_per_second and string.format(' (%.1f t/s)', status.tokens_per_second) or ''
       status_callback((action or 'Thinking') .. ' with ' .. status_model .. suffix)
@@ -134,6 +136,10 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
     elseif status.phase == 'error' then
       status_callback('Provider error from ' .. status_model)
     end
+  end
+
+  if request_context and request_context.on_request_start then
+    request_context.on_request_start(source_id, model)
   end
 
   ai_provider.chat(provider, {

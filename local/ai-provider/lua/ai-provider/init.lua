@@ -44,7 +44,7 @@
 
 ---@class AiProviderStatus
 ---@field provider string Provider name.
----@field phase string Standard phase, for example `loading`, `loaded`, `thinking`, `generating`, `done`, or `error`.
+---@field phase string Standard phase, for example `loading`, `loaded`, `context`, `thinking`, `generating`, `done`, or `error`.
 ---@field message string Human-readable status message.
 ---@field model? string Model/profile name.
 ---@field used_model? string Raw provider model name.

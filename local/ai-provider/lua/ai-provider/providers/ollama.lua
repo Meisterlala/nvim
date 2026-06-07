@@ -295,14 +295,7 @@ function M.chat(request)
         end
 
         if code ~= 0 then
-          log.error(
-            'ollama request process failed code='
-              .. tostring(code)
-              .. ' model='
-              .. tostring(raw_model)
-              .. ' error='
-              .. tostring(error_message)
-          )
+          log.error('ollama request process failed code=' .. tostring(code) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_message))
           if request.callback then
             request.callback(nil, {
               requested_model = selected_model,
@@ -354,12 +347,12 @@ function M.chat(request)
           if request.callback then
             request.callback(nil, meta)
           end
-        emit_status {
-          phase = 'error',
-          message = provider_error,
-          tokens = metrics.eval_count,
-          tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration),
-        }
+          emit_status {
+            phase = 'error',
+            message = provider_error,
+            tokens = metrics.eval_count,
+            tokens_per_second = tokens_per_second(metrics.eval_count, metrics.eval_duration),
+          }
           return
         end
         if done_reason == 'length' then
@@ -467,14 +460,7 @@ function M.chat(request)
 
         if response.status ~= 200 then
           local error_message = response.error or response.body or 'ollama preload failed'
-          log.error(
-            'ollama preload failed status='
-              .. tostring(response.status)
-              .. ' model='
-              .. tostring(raw_model)
-              .. ' error='
-              .. tostring(error_message)
-          )
+          log.error('ollama preload failed status=' .. tostring(response.status) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_message))
           if request.callback then
             request.callback(nil, {
               requested_model = selected_model,
@@ -506,8 +492,8 @@ function M.chat(request)
           )
         )
         emit_status {
-          phase = 'generating',
-          message = 'Generating response',
+          phase = 'context',
+          message = 'Loading prompt context',
         }
         job = run_chat()
         if request.register_http_job then

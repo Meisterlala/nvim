@@ -6,6 +6,72 @@ local M = {}
 
 local frames = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
 
+local function preview_width(bufnr)
+  local win = vim.fn.bufwinid(bufnr)
+  if win ~= -1 then
+    return math.max(20, vim.api.nvim_win_get_width(win) - 4)
+  end
+  return 76
+end
+
+local function split_long_token(token, width)
+  local parts = {}
+  local current = ''
+  local index = 0
+  local length = vim.fn.strchars(token)
+
+  while index < length do
+    local char = vim.fn.strcharpart(token, index, 1)
+    if current ~= '' and vim.fn.strdisplaywidth(current .. char) > width then
+      table.insert(parts, current)
+      current = char
+    else
+      current = current .. char
+    end
+    index = index + 1
+  end
+
+  if current ~= '' then
+    table.insert(parts, current)
+  end
+  return parts
+end
+
+local function wrap_line(line, width)
+  if line == '' or vim.fn.strdisplaywidth(line) <= width then
+    return { line }
+  end
+
+  local wrapped = {}
+  local current = ''
+
+  for token in line:gmatch '%S+%s*' do
+    local candidate = current .. token
+    if current ~= '' and vim.fn.strdisplaywidth(candidate) > width then
+      table.insert(wrapped, (current:gsub('%s+$', '')))
+      current = token
+    else
+      current = candidate
+    end
+
+    if vim.fn.strdisplaywidth(current) > width then
+      local parts = split_long_token(current:gsub('%s+$', ''), width)
+      for index, part in ipairs(parts) do
+        if index < #parts then
+          table.insert(wrapped, part)
+        else
+          current = part
+        end
+      end
+    end
+  end
+
+  if current ~= '' then
+    table.insert(wrapped, (current:gsub('%s+$', '')))
+  end
+  return #wrapped > 0 and wrapped or { line }
+end
+
 local function stop_timer_safe(spinner)
   local timer = spinner and spinner.timer
   if not timer then
@@ -25,13 +91,26 @@ local function stop_timer_safe(spinner)
 end
 
 ---@param spinner table
+---@param bufnr integer
 ---@return table
-local function preview_virt_lines(spinner)
+local function preview_virt_lines(spinner, bufnr)
   local lines = {}
+  local width = preview_width(bufnr)
   for _, line in ipairs(spinner.stream_preview) do
-    table.insert(lines, { { line, 'Comment' } })
+    for _, wrapped in ipairs(wrap_line(line, width)) do
+      table.insert(lines, wrapped)
+    end
   end
-  return lines
+
+  while #lines > (config.values.preview_lines or 5) do
+    table.remove(lines, 1)
+  end
+
+  local virt_lines = {}
+  for _, line in ipairs(lines) do
+    table.insert(virt_lines, { { line, 'Comment' } })
+  end
+  return virt_lines
 end
 
 ---@param bufnr integer
@@ -77,7 +156,7 @@ function M.start(bufnr)
       virt_text = virt_text,
       virt_text_pos = 'eol',
     }
-    local virt_lines = preview_virt_lines(spinner)
+    local virt_lines = preview_virt_lines(spinner, bufnr)
     if #virt_lines > 0 then
       opts.virt_lines = virt_lines
       opts.virt_lines_above = false
@@ -113,8 +192,19 @@ function M.append_stream(spinner, text)
     spinner.stream_preview[#spinner.stream_preview] = (spinner.stream_preview[#spinner.stream_preview] or '') .. chunk
   end
 
-  while #spinner.stream_preview > (config.values.preview_lines or 5) do
+  while #spinner.stream_preview > 200 do
     table.remove(spinner.stream_preview, 1)
+  end
+end
+
+---@param spinner table|nil
+function M.start_stream_section(spinner)
+  if not spinner or #spinner.stream_preview == 0 then
+    return
+  end
+
+  if spinner.stream_preview[#spinner.stream_preview] ~= '' then
+    table.insert(spinner.stream_preview, '')
   end
 end
 

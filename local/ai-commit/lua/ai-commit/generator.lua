@@ -135,6 +135,11 @@ function M.insert()
         table.insert(http_jobs, job)
       end
     end,
+    on_request_start = function()
+      if not done and not aborted then
+        spinner_ui.start_stream_section(spinner)
+      end
+    end,
     on_chunk = function(chunk)
       if not done and not aborted then
         spinner_ui.append_stream(spinner, chunk)
