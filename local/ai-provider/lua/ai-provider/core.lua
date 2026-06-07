@@ -34,12 +34,13 @@ local function is_configured_provider(provider)
 end
 
 local function source_name(source_id)
-  local source = state.sources[source_id]
+  local prefs = M.load_preferences()
+  local source = prefs.sources and prefs.sources[source_id]
   if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
     return source.name
   end
-  local prefs = M.load_preferences()
-  source = prefs.sources and prefs.sources[source_id]
+
+  source = state.sources[source_id]
   if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
     return source.name
   end
@@ -47,16 +48,33 @@ local function source_name(source_id)
 end
 
 local function source_registered_name(source_id)
-  local source = state.sources[source_id]
+  local prefs = M.load_preferences()
+  local source = prefs.sources and prefs.sources[source_id]
   if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
     return source.name
   end
-  local prefs = M.load_preferences()
-  source = prefs.sources and prefs.sources[source_id]
+
+  source = state.sources[source_id]
   if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
     return source.name
   end
   return nil
+end
+
+local function registered_source_metadata(source_id)
+  local metadata = {}
+  local prefs = M.load_preferences()
+  local source = prefs.sources and prefs.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    metadata.name = source.name
+  end
+
+  source = state.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    metadata.name = metadata.name or source.name
+  end
+
+  return metadata
 end
 
 local function source_display(source_id)
@@ -66,10 +84,7 @@ end
 local function has_source_model_preference(source_id)
   local prefs = M.load_preferences()
   local source = prefs.sources and prefs.sources[source_id]
-  return type(source) == 'table'
-    and is_configured_provider(source.provider)
-    and type(source.model) == 'string'
-    and source.model ~= ''
+  return type(source) == 'table' and is_configured_provider(source.provider) and type(source.model) == 'string' and source.model ~= ''
 end
 
 local function source_selection_display(source_id)
@@ -199,11 +214,7 @@ function M.get_selected_model(provider, source_id)
   local prefs = M.load_preferences()
   if valid_source_id(source_id) then
     local source = prefs.sources and prefs.sources[source_id]
-    if type(source) == 'table'
-      and source.provider == provider
-      and type(source.model) == 'string'
-      and source.model ~= ''
-    then
+    if type(source) == 'table' and source.provider == provider and type(source.model) == 'string' and source.model ~= '' then
       return source.model
     end
   end
@@ -260,10 +271,11 @@ function M.set_source_selection(source_id, provider, model)
   local prefs = M.load_preferences()
   prefs.sources = prefs.sources or {}
   local source = type(prefs.sources[source_id]) == 'table' and prefs.sources[source_id] or {}
+  local metadata = registered_source_metadata(source_id)
   source.provider = provider
   source.model = model
   source.label = nil
-  source.name = nil
+  source.name = source.name or metadata.name
   prefs.sources[source_id] = source
   return M.save_preferences(prefs)
 end
@@ -275,7 +287,9 @@ function M.register_source(source_id, opts)
 
   opts = opts or {}
   state.sources[source_id] = state.sources[source_id] or {}
-  state.sources[source_id].name = opts.name
+  if type(opts.name) == 'string' and opts.name ~= '' then
+    state.sources[source_id].name = opts.name
+  end
 
   local prefs = M.load_preferences()
   prefs.sources = prefs.sources or {}
@@ -293,7 +307,7 @@ function M.register_source(source_id, opts)
   local provider = opts.provider
   local model = opts.model
   if provider and model and is_configured_provider(provider) then
-    prefs.sources[source_id] = { provider = provider, model = model }
+    prefs.sources[source_id] = { provider = provider, model = model, name = source.name }
     if type(opts.name) == 'string' and opts.name ~= '' then
       prefs.sources[source_id].name = opts.name
     end
@@ -408,9 +422,7 @@ function M.chat(first, second)
   request.model = request.model or M.get_selected_model(provider, request.source_id)
   request.provider_config = get_provider_config(provider)
   if not request.model then
-    log.error(
-      string.format('chat requested without selected model source=%s provider=%s', tostring(request.source_id), tostring(provider))
-    )
+    log.error(string.format('chat requested without selected model source=%s provider=%s', tostring(request.source_id), tostring(provider)))
     if request.callback then
       request.callback(nil, nil)
     end
@@ -567,7 +579,7 @@ local function select_helper(opts, callback)
       end
 
       if callback then
-        callback({ provider = choice.provider, model = choice.model, label = choice.label })
+        callback { provider = choice.provider, model = choice.model, label = choice.label }
       end
     end)
   end)

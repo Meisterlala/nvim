@@ -97,4 +97,45 @@ describe('ai-provider core', function()
     rawset(core, 'load_preferences', original_load_preferences)
     rawset(core, 'save_preferences', original_save_preferences)
   end)
+
+  it('persists registered source names across model selection updates', function()
+    ai_provider.setup {
+      default_provider = 'ollama',
+      providers = {
+        ollama = { default_model = 'gemma4:e2b' },
+      },
+    }
+
+    local core = require 'ai-provider.core'
+    local original_load_preferences = core.load_preferences
+    local original_save_preferences = core.save_preferences
+    local prefs = {}
+
+    rawset(core, 'load_preferences', function()
+      return vim.deepcopy(prefs)
+    end)
+    rawset(core, 'save_preferences', function(next_prefs)
+      prefs = vim.deepcopy(next_prefs)
+      return true
+    end)
+
+    assert.is_true(ai_provider.register_source('ai-commit-refine', { name = 'AI Commit: Refinement' }))
+    assert.are.same('AI Commit: Refinement', ai_provider.get_source_name 'ai-commit-refine')
+    assert.is_true(ai_provider.set_source_selection('ai-commit-refine', 'ollama', 'gemma4:e2b 64k'))
+
+    assert.are.same({
+      name = 'AI Commit: Refinement',
+      provider = 'ollama',
+      model = 'gemma4:e2b 64k',
+    }, prefs.sources['ai-commit-refine'])
+    assert.are.same({
+      provider = 'ollama',
+      model = 'gemma4:e2b 64k',
+      label = 'ollama/gemma4:e2b 64k',
+      name = 'AI Commit: Refinement',
+    }, ai_provider.get_source_selection 'ai-commit-refine')
+
+    rawset(core, 'load_preferences', original_load_preferences)
+    rawset(core, 'save_preferences', original_save_preferences)
+  end)
 end)

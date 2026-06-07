@@ -77,6 +77,51 @@ local function provider_label(provider)
   return provider:sub(1, 1):upper() .. provider:sub(2)
 end
 
+local function format_error_detail(meta)
+  if type(meta) ~= 'table' then
+    return 'unknown error'
+  end
+
+  local parts = { tostring(meta.error or 'unknown error') }
+  if meta.done_reason then
+    table.insert(parts, 'done_reason=' .. tostring(meta.done_reason))
+  end
+  if meta.requested_model then
+    table.insert(parts, 'requested_model=' .. tostring(meta.requested_model))
+  end
+  if meta.used_model then
+    table.insert(parts, 'used_model=' .. tostring(meta.used_model))
+  end
+  if meta.elapsed_ms then
+    table.insert(parts, string.format('elapsed=%.1fs', meta.elapsed_ms / 1000))
+  end
+  if meta.load_duration then
+    table.insert(parts, string.format('load=%.1fs', meta.load_duration / 1e9))
+  end
+  if meta.prompt_eval_count then
+    table.insert(parts, 'prompt_tokens=' .. tostring(meta.prompt_eval_count))
+  end
+  if meta.eval_count then
+    table.insert(parts, 'eval_tokens=' .. tostring(meta.eval_count))
+  end
+
+  return table.concat(parts, ' | ')
+end
+
+local function format_error_summary(provider, meta)
+  local error = type(meta) == 'table' and tostring(meta.error or '') or ''
+  if error:match 'timed out' or error:match 'Operation timed out' then
+    return provider .. ' request timed out while waiting for the model.'
+  end
+  if type(meta) == 'table' and meta.done_reason == 'length' then
+    return provider .. ' stopped because the output or context limit was reached.'
+  end
+  if error ~= '' and error ~= 'unknown error' then
+    return provider .. ' request failed: ' .. error
+  end
+  return provider .. ' request failed. See ai-commit logs for details.'
+end
+
 function M.select_model()
   local logger = log()
   local ai_provider = require 'ai-provider'
@@ -89,6 +134,13 @@ function M.select_summary_model()
   local ai_provider = require 'ai-provider'
   logger.info('Opening AI provider model picker for source=' .. config.summary_source_id)
   ai_provider.select_source_model(config.summary_source_id)
+end
+
+function M.select_refinement_model()
+  local logger = log()
+  local ai_provider = require 'ai-provider'
+  logger.info('Opening AI provider model picker for source=' .. config.refine_source_id)
+  ai_provider.select_source_model(config.refine_source_id)
 end
 
 ---@param full_prompt string
@@ -161,9 +213,10 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
         return
       end
       if not message then
-        logger.error(provider .. ' chat request failed: ' .. tostring(meta and meta.error or 'unknown error'))
-        vim.notify(provider .. ' request failed. See ai-commit logs.', vim.log.levels.ERROR)
-        callback(nil, nil)
+        local detail = format_error_detail(meta)
+        logger.error(provider .. ' chat request failed: ' .. detail)
+        vim.notify(format_error_summary(provider, meta), vim.log.levels.ERROR)
+        callback(nil, meta)
         return
       end
       callback(util.clean_message(message), { requested_model = model, used_model = meta and meta.used_model or model })
@@ -336,7 +389,7 @@ local function maybe_refine_message(context, message, iteration, callback, statu
   dump_prompt(prompt, 'refinement-' .. tostring(next_iteration), context.branch)
 
   local refinement_context = child_request_context(request_context, {
-    source_id = config.message_source_id,
+    source_id = config.refine_source_id,
     status_action = tostring(next_iteration) .. '. Refinement',
   })
   M.complete_prompt(prompt, function(refined_message)

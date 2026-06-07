@@ -167,6 +167,7 @@ function M.chat(request)
   local raw_model = selected_config.model or selected_model
   local context_size = request.context_size or selected_config.context_size or provider_config.context_size
   local keep_alive = request.keep_alive or provider_config.keep_alive
+  local timeout = request.timeout or selected_config.timeout or provider_config.timeout or 120000
   local think = request.think
   if think == nil then
     think = selected_config.think
@@ -246,7 +247,7 @@ function M.chat(request)
       tostring(context_size),
       tostring(request.max_tokens),
       tostring(keep_alive),
-      tostring(request.timeout or 30000),
+      tostring(timeout),
       tostring(request.stream ~= false),
       tostring(think)
     )
@@ -270,7 +271,7 @@ function M.chat(request)
     return curl.stream_json_lines {
       url = endpoint() .. '/api/chat',
       body = body,
-      timeout = request.timeout or 30000,
+      timeout = timeout,
       is_cancelled = request.is_cancelled,
       on_json_line = function(data)
         if is_cancelled(request) then
@@ -463,17 +464,21 @@ function M.chat(request)
         phase = 'loaded',
         message = 'Model loaded',
       }
+      emit_status {
+        phase = 'context',
+        message = 'Loading prompt context',
+      }
     elseif model_loaded == false then
       emit_status {
         phase = 'loading',
         message = 'Loading model',
       }
+    else
+      emit_status {
+        phase = 'context',
+        message = 'Loading prompt context',
+      }
     end
-
-    emit_status {
-      phase = 'context',
-      message = 'Loading prompt context',
-    }
     job = run_chat()
     if request.register_http_job then
       request.register_http_job(job)

@@ -2,6 +2,7 @@ local M = {}
 
 M.summary_source_id = 'ai-commit-summarize'
 M.message_source_id = 'ai-commit-message'
+M.refine_source_id = 'ai-commit-refine'
 
 M.values = {
   context = {
@@ -9,7 +10,7 @@ M.values = {
     recent_commits = true,
     staged_changes = true,
   },
-  max_tokens = 10000,
+  max_tokens = 32768,
   spinner_interval = 80,
   preview_lines = 5,
   max_diff_chars = 100000,

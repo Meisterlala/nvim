@@ -96,6 +96,30 @@ describe('ollama provider options', function()
     assert.are.same('10m', captured.keep_alive)
   end)
 
+  it('uses configured request timeout for streaming chat', function()
+    local captured_timeout = nil
+    package.loaded['ai-provider.curl'] = {
+      stream_json_lines = function(request)
+        captured_timeout = request.timeout
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'Reply with exactly: ok',
+      provider_config = {
+        timeout = 180000,
+      },
+      callback = function() end,
+    }
+
+    assert.are.same(180000, captured_timeout)
+  end)
+
   it('sends configured thinking mode for reasoning model profiles', function()
     ---@type table|nil
     local captured = nil
@@ -298,7 +322,7 @@ describe('ollama provider options', function()
     end, 10)
 
     assert.are.same('loading', statuses[1])
-    assert.are.same('context', statuses[2])
-    assert.are.same('generating', statuses[3])
+    assert.are.same('generating', statuses[2])
+    assert.is_false(vim.tbl_contains(statuses, 'context'))
   end)
 end)

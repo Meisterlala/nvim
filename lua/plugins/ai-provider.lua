@@ -14,16 +14,26 @@ return {
       ollama = {
         default_model = 'gemma4:e4b',
         context_size = 1024 * 8,
-        load_timeout = 120000,
+        timeout = 180000,
         keep_alive = '1h',
         models = {
           ['gemma4:e2b 32k'] = {
             model = 'gemma4:e2b',
             context_size = 1024 * 32,
           },
+          ['gemma4:e2b 32k fast'] = {
+            model = 'gemma4:e2b',
+            context_size = 1024 * 32,
+            think = false,
+          },
           ['gemma4:e2b 64k'] = {
             model = 'gemma4:e2b',
             context_size = 1024 * 64,
+          },
+          ['gemma4:e2b 64k fast'] = {
+            model = 'gemma4:e2b',
+            context_size = 1024 * 64,
+            think = false,
           },
           ['qwen3.5:4b 64k'] = {
             model = 'qwen3.5:4b',

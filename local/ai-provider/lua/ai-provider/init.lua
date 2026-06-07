@@ -23,6 +23,7 @@
 ---@class AiProviderModelConfig
 ---@field model string Underlying provider model name.
 ---@field context_size? integer Optional model-specific context size override.
+---@field timeout? integer Optional model-specific request timeout in milliseconds.
 ---@field think? boolean Optional Ollama thinking mode override for this logical model profile.
 
 ---@class AiProviderConfig
@@ -60,6 +61,7 @@
 ---@field stream? boolean Whether the provider should stream chunks. Defaults to true when supported.
 ---@field max_tokens? integer Maximum generated tokens/provider equivalent.
 ---@field context_size? integer Per-request context size override.
+---@field timeout? integer Per-request timeout in milliseconds.
 ---@field keep_alive? string|integer Per-request keep-alive/unload timeout override.
 ---@field ps_timeout? integer Per-request loaded-model inspection timeout in milliseconds.
 ---@field think? boolean Per-request Ollama thinking mode override.

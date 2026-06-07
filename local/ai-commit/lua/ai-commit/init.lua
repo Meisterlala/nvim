@@ -16,6 +16,7 @@ function M.setup(opts)
     local sources = {
       { id = config.summary_source_id, name = 'AI Commit: OpenCode Summary' },
       { id = config.message_source_id, name = 'AI Commit: Commit Message' },
+      { id = config.refine_source_id, name = 'AI Commit: Refinement' },
     }
     for _, source in ipairs(sources) do
       ai_provider.register_source(source.id, { name = source.name })
@@ -53,6 +54,10 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('AICommitSummaryModel', providers.select_summary_model, {
     desc = 'Select AI commit summary model',
   })
+
+  vim.api.nvim_create_user_command('AICommitRefinementModel', providers.select_refinement_model, {
+    desc = 'Select AI commit refinement model',
+  })
 end
 
 function M.insert()
@@ -61,6 +66,10 @@ end
 
 function M.select_model()
   providers.select_model()
+end
+
+function M.select_refinement_model()
+  providers.select_refinement_model()
 end
 
 return M
