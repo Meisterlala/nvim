@@ -32,30 +32,6 @@ local function child_request_context(request_context, overrides)
   return vim.tbl_extend('force', request_context or {}, overrides or {})
 end
 
----@return string
-function M.selected_model_name()
-  local values = config.values
-  local provider_prefix = ''
-  if values.provider == 'ollama' then
-    provider_prefix = '[Ollama] '
-  elseif values.provider == 'openrouter' then
-    provider_prefix = '[OpenRouter] '
-  elseif values.provider == 'copilot' and values.model then
-    provider_prefix = '[Copilot] '
-  end
-
-  if type(values.model_name) == 'string' and values.model_name ~= '' then
-    return provider_prefix .. values.model_name
-  end
-  if type(values.model) == 'string' and values.model ~= '' then
-    return provider_prefix .. values.model
-  end
-  if values.provider == 'copilot' then
-    return 'Copilot default'
-  end
-  return 'Unknown'
-end
-
 function M.select_model()
   local logger = log()
   local ai_provider = require 'ai-provider'
@@ -145,142 +121,19 @@ end
 ---@param callback function(string|nil, table|nil)
 ---@param status_callback function(string)|nil
 ---@param request_context table|nil
-local function complete_copilot(source_id, full_prompt, callback, status_callback, request_context)
-  local logger = log()
-  local ai_provider = require 'ai-provider'
-  local model = config.values.model or ai_provider.get_selected_model('copilot', source_id) or 'auto'
-
-  if status_callback then
-    status_callback('Waiting for response from ' .. model)
-  end
-
-  ai_provider.chat('copilot', {
-    model = model,
-    prompt = full_prompt,
-    stream = false,
-    max_tokens = config.values.max_tokens,
-    timeout = config.values.chat_timeout,
-    is_cancelled = request_context and request_context.is_cancelled,
-    register_http_job = request_context and request_context.register_http_job,
-    on_status = function(status)
-      if not status_callback or type(status) ~= 'table' then
-        return
-      end
-      if status.phase == 'authenticating' then
-        status_callback 'Authenticating with Copilot'
-      elseif status.phase == 'generating' then
-        status_callback('Generating response with ' .. (status.model or model))
-      elseif status.phase == 'error' then
-        status_callback 'Provider error from Copilot'
-      end
-    end,
-    callback = function(message, meta)
-      if request_context and request_context.is_cancelled and request_context.is_cancelled() then
-        return
-      end
-      if not message then
-        logger.error('Copilot chat request failed through ai-provider: ' .. tostring(meta and meta.error or 'unknown error'))
-        vim.notify('Copilot request failed. See ai-commit logs.', vim.log.levels.ERROR)
-        callback(nil, nil)
-        return
-      end
-      callback(util.clean_message(message), { requested_model = model, used_model = meta and meta.used_model or model })
-    end,
-  })
-end
-
----@param full_prompt string
----@param callback function(string|nil, table|nil)
----@param status_callback function(string)|nil
----@param request_context table|nil
-local function complete_openrouter(source_id, full_prompt, callback, status_callback, request_context)
-  local logger = log()
-  local api_key = os.getenv 'AVANTE_OPENROUTER_API_KEY' or os.getenv 'OPENROUTER_API_KEY'
-  if not api_key then
-    logger.error 'OpenRouter API key not found'
-    vim.notify('OpenRouter API key not found. Please set AVANTE_OPENROUTER_API_KEY or OPENROUTER_API_KEY.', vim.log.levels.ERROR)
-    callback(nil, nil)
-    return
-  end
-
-  local model = config.values.model or 'anthropic/claude-sonnet-4-20250514'
-  if status_callback then
-    status_callback('Waiting for response from ' .. model)
-  end
-
-  local curl = require 'plenary.curl'
-  local job = curl.post(config.values.openrouter.endpoint .. '/chat/completions', {
-    headers = {
-      ['Authorization'] = 'Bearer ' .. api_key,
-      ['Content-Type'] = 'application/json',
-      ['HTTP-Referer'] = 'https://github.com/opencode-sh/ai-commit',
-      ['X-Title'] = 'ai-commit.lua',
-    },
-    body = vim.json.encode {
-      messages = { { role = 'user', content = full_prompt } },
-      stream = false,
-      max_tokens = config.values.max_tokens,
-      model = model,
-      include_reasoning = config.values.openrouter.reasoning,
-    },
-    timeout = config.values.chat_timeout,
-    callback = vim.schedule_wrap(function(response)
-      if request_context and request_context.is_cancelled and request_context.is_cancelled() then
-        return
-      end
-      if response.status ~= 200 then
-        logger.error(string.format('OpenRouter API error: %d body=%s', response.status, util.format_body_for_log(response.body)))
-        vim.notify('OpenRouter API request failed (' .. response.status .. '). See ai-commit logs.', vim.log.levels.ERROR)
-        callback(nil, nil)
-        return
-      end
-
-      local ok, data = pcall(vim.json.decode, response.body)
-      local message_obj = ok and data.choices and data.choices[1] and data.choices[1].message
-      if not message_obj then
-        logger.error('Failed to parse OpenRouter response body=' .. util.format_body_for_log(response.body))
-        callback(nil, nil)
-        return
-      end
-
-      local content = message_obj.content or ''
-      if (content == '' or content:match '^%s*$') and message_obj.reasoning then
-        content = message_obj.reasoning
-      end
-      callback(util.clean_message(content), { requested_model = model, used_model = data.model or model })
-    end),
-    on_error = vim.schedule_wrap(function(err)
-      if request_context and request_context.is_cancelled and request_context.is_cancelled() then
-        return
-      end
-      logger.error('OpenRouter chat request failed: ' .. tostring(err and err.stderr or 'unknown error'))
-      callback(nil, nil)
-    end),
-  })
-
-  if request_context and request_context.register_http_job then
-    request_context.register_http_job(job)
-  end
-end
-
----@param full_prompt string
----@param callback function(string|nil, table|nil)
----@param status_callback function(string)|nil
----@param request_context table|nil
 function M.complete_prompt(full_prompt, callback, status_callback, request_context)
   local logger = log()
   local ai_provider = require 'ai-provider'
   local source_id = request_context and request_context.source_id or config.message_source_id
   local selection = ai_provider.get_source_selection(source_id)
-  local local_provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
+  local provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
   logger.debug(
     string.format(
-      'Completing AI prompt (source=%s chars=%d selected_provider=%s selected_model=%s fallback=%s)',
+      'Completing AI prompt (source=%s chars=%d provider=%s model=%s)',
       source_id,
       #full_prompt,
-      tostring(local_provider),
-      tostring(selection and selection.model or nil),
-      tostring(config.values.provider)
+      tostring(provider),
+      tostring(selection and selection.model or nil)
     )
   )
   if status_callback then
@@ -288,26 +141,23 @@ function M.complete_prompt(full_prompt, callback, status_callback, request_conte
     if action and selection and selection.model then
       status_callback(action .. ' with ' .. selection.model)
     else
-      status_callback('Checking ' .. local_provider)
+      status_callback('Checking ' .. provider)
     end
   end
 
-  ai_provider.check(local_provider, function(working)
+  ai_provider.check(provider, function(working)
     if request_context and request_context.is_cancelled and request_context.is_cancelled() then
       return
     end
     if working then
-      logger.info('Routing prompt source=' .. source_id .. ' provider=' .. local_provider)
+      logger.info('Routing prompt source=' .. source_id .. ' provider=' .. provider)
       complete_ai_provider(source_id, full_prompt, callback, status_callback, request_context)
       return
     end
 
-    logger.info(string.format('%s unavailable for source=%s, falling back to %s provider', local_provider, source_id, config.values.provider))
-    if config.values.provider == 'openrouter' then
-      complete_openrouter(source_id, full_prompt, callback, status_callback, request_context)
-    else
-      complete_copilot(source_id, full_prompt, callback, status_callback, request_context)
-    end
+    logger.error(string.format('AI provider %s unavailable for source=%s', provider, source_id))
+    vim.notify('AI provider ' .. provider .. ' unavailable. Check :AIProvider.', vim.log.levels.ERROR)
+    callback(nil, nil)
   end)
 end
 
@@ -361,19 +211,28 @@ end
 ---@param status_callback function(string)|nil
 ---@param request_context table|nil
 function M.generate_commit_message(branch, recent_commits, session_summary, diff_stat, diff, callback, status_callback, request_context)
-  local session_context = session_summary
-  if type(session_context) ~= 'string' or session_context:match '^%s*$' then
-    session_context = 'No recent assistant session context available.'
+  local sections = {}
+  if type(diff_stat) == 'string' and not diff_stat:match '^%s*$' then
+    table.insert(sections, { title = 'Staged files', body = diff_stat, fenced = true })
   end
-  local prompt = string.format(prompts.commit, branch, recent_commits, session_context, diff_stat, diff)
+  if type(recent_commits) == 'string' and not recent_commits:match '^%s*$' then
+    table.insert(sections, { title = 'Recent commits', body = recent_commits })
+  end
+  if type(session_summary) == 'string' and not session_summary:match '^%s*$' then
+    table.insert(sections, { title = 'Recent assistant session context', body = session_summary })
+  end
+  if type(diff) == 'string' and not diff:match '^%s*$' then
+    table.insert(sections, { title = 'Staged changes', body = diff, fenced = true })
+  end
+  local prompt = prompts.commit(branch, sections)
   log().debug(
     string.format(
       'Commit prompt built (branch=%s commits_chars=%d session_context_chars=%d diff_stat_chars=%d diff_chars=%d prompt_chars=%d has_session_context=%s)',
       branch,
-      #recent_commits,
-      #session_context,
-      #diff_stat,
-      #diff,
+      type(recent_commits) == 'string' and #recent_commits or 0,
+      type(session_summary) == 'string' and #session_summary or 0,
+      type(diff_stat) == 'string' and #diff_stat or 0,
+      type(diff) == 'string' and #diff or 0,
       #prompt,
       session_summary and 'yes' or 'no'
     )

@@ -1,6 +1,6 @@
 local M = {}
 
-M.commit = [[You are a git commit message generator following Conventional Commits v1.0.0 specification.
+M.commit_header = [[You are a git commit message generator following Conventional Commits v1.0.0 specification.
 
 STRUCTURE:
 <type>[optional scope]: <description>
@@ -29,34 +29,34 @@ SPECIFICATION (https://www.conventionalcommits.org/en/v1.0.0/):
 ADDITIONAL GUIDELINES:
 - Description: Use lowercase, imperative mood, no ending period, max 50 chars
 - Header Only: Most of the time, ONLY output the single header line (type[scope]: description).
-- Body: FORBIDDEN for 75%% of commits. DO NOT include a body for small changes, simple fixes, or minor features.
+- Body: FORBIDDEN for 75% of commits. DO NOT include a body for small changes, simple fixes, or minor features.
 - Body: ONLY include a body if the change is a massive architectural shift, highly complex, or a BREAKING CHANGE.
 - Body Formatting: If a body is absolutely necessary, wrap at 72 chars, explain WHAT and WHY (not HOW). DO NOT ramble or over-explain.
 - Type casing: Any casing may be used, but be consistent (prefer lowercase)
 - SemVer relationship: fix = PATCH, feat = MINOR, BREAKING CHANGE = MAJOR
 - Revert commits: Use "revert" type with footer referencing commit SHAs
 - BREAKING CHANGE: Use SPARINGLY. ONLY for big, actual breaking changes.
-- BREAKING CHANGE: Adding new features is NOT breaking. Only for removed/changed functionality.
+- BREAKING CHANGE: Adding new features is NOT breaking. Only for removed/changed functionality.]]
 
-Current branch: %s
+---@param branch string
+---@param sections table[]
+---@return string
+function M.commit(branch, sections)
+  local parts = { M.commit_header, 'Current branch: ' .. branch }
 
-Recent commits:
-%s
+  for _, section in ipairs(sections or {}) do
+    if section.body and section.body ~= '' then
+      if section.fenced then
+        table.insert(parts, section.title .. ':\n```\n' .. section.body .. '\n```')
+      else
+        table.insert(parts, section.title .. ':\n' .. section.body)
+      end
+    end
+  end
 
-Recent assistant session context:
-%s
-
-Staged Files:
-```
-%s
-```
-
-Staged changes:
-```
-%s
-```
-
-Generate ONLY the commit message following the specification above:]]
+  table.insert(parts, 'Generate ONLY the commit message following the specification above:')
+  return table.concat(parts, '\n\n')
+end
 
 M.session_summary = [[Summarize the following %s session for a git commit message generator.
 

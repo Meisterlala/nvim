@@ -102,9 +102,22 @@ function M.insert()
   local done = false
   local aborted = false
   local http_jobs = {}
-  local context_total = 5
+  local context_opts = config.values.context or {}
+  local include_recent_commits = context_opts.recent_commits ~= false
+  local include_opencode = context_opts.opencode ~= false
+  local include_staged_changes = context_opts.staged_changes ~= false
+  local context_total = 2
+  if include_recent_commits then
+    context_total = context_total + 1
+  end
+  if include_opencode then
+    context_total = context_total + 1
+  end
+  if include_staged_changes then
+    context_total = context_total + 1
+  end
   local context_done = 0
-  local pending = 5
+  local pending = context_total
   local failed = false
   local last_status_line = nil
   local context = {}
@@ -210,64 +223,70 @@ function M.insert()
     mark_done()
   end)
 
-  git.recent_commits(5, function(commits)
-    if done then
-      return
-    end
-    context.recent_commits = commits
-    logger.debug('Recent commit context ready (chars=' .. tostring(#commits) .. ')')
-    mark_done()
-  end)
-
-  session_context.get_recent(function(session)
-    if done then
-      return
-    end
-    if not session then
-      logger.debug 'No assistant session context available'
-      mark_done()
-      return
-    end
-    logger.debug(
-      'Assistant session context loaded (provider='
-        .. tostring(session.label or session.provider)
-        .. ' transcript_chars='
-        .. tostring(#(session.transcript or ''))
-        .. ')'
-    )
-    providers.summarize_session(session, function(summary)
+  if include_recent_commits then
+    git.recent_commits(5, function(commits)
       if done then
         return
       end
-      context.session_summary = summary
-      logger.debug('Assistant session summary ready (chars=' .. tostring(summary and #summary or 0) .. ')')
+      context.recent_commits = commits
+      logger.debug('Recent commit context ready (chars=' .. tostring(#commits) .. ')')
       mark_done()
-    end, status, request_context)
-  end, status)
+    end)
+  end
 
-  git.staged_diff(function(diff, diff_meta)
-    if done then
-      return
-    end
-    if not diff then
-      failed = true
-      finalize(nil)
-      return
-    end
-    context.diff = diff
-    context.diff_meta = diff_meta
-    logger.debug(
-      string.format(
-        'Staged diff context ready (chars=%d changed_lines=%s context_lines=%s truncated=%s original_chars=%s)',
-        #diff,
-        tostring(diff_meta and diff_meta.changed_lines),
-        tostring(diff_meta and diff_meta.context_lines),
-        tostring(diff_meta and diff_meta.truncated),
-        tostring(diff_meta and diff_meta.original_chars)
+  if include_opencode then
+    session_context.get_recent(function(session)
+      if done then
+        return
+      end
+      if not session then
+        logger.debug 'No assistant session context available'
+        mark_done()
+        return
+      end
+      logger.debug(
+        'Assistant session context loaded (provider='
+          .. tostring(session.label or session.provider)
+          .. ' transcript_chars='
+          .. tostring(#(session.transcript or ''))
+          .. ')'
       )
-    )
-    mark_done()
-  end)
+      providers.summarize_session(session, function(summary)
+        if done then
+          return
+        end
+        context.session_summary = summary
+        logger.debug('Assistant session summary ready (chars=' .. tostring(summary and #summary or 0) .. ')')
+        mark_done()
+      end, status, request_context)
+    end, status)
+  end
+
+  if include_staged_changes then
+    git.staged_diff(function(diff, diff_meta)
+      if done then
+        return
+      end
+      if not diff then
+        failed = true
+        finalize(nil)
+        return
+      end
+      context.diff = diff
+      context.diff_meta = diff_meta
+      logger.debug(
+        string.format(
+          'Staged diff context ready (chars=%d changed_lines=%s context_lines=%s truncated=%s original_chars=%s)',
+          #diff,
+          tostring(diff_meta and diff_meta.changed_lines),
+          tostring(diff_meta and diff_meta.context_lines),
+          tostring(diff_meta and diff_meta.truncated),
+          tostring(diff_meta and diff_meta.original_chars)
+        )
+      )
+      mark_done()
+    end)
+  end
 
   git.staged_diff_stat(function(diff_stat)
     if done then

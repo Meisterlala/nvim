@@ -1,7 +1,6 @@
 local config = require 'ai-commit.config'
 local generator = require 'ai-commit.generator'
 local log = require('ai-commit.log').get
-local preferences = require 'ai-commit.preferences'
 local providers = require 'ai-commit.providers'
 local state = require 'ai-commit.state'
 
@@ -10,7 +9,6 @@ local M = {}
 ---@param opts table|nil
 function M.setup(opts)
   config.setup(opts)
-  preferences.load()
 
   local logger = log()
   local ok, ai_provider = pcall(require, 'ai-provider')
@@ -28,7 +26,6 @@ function M.setup(opts)
       end
     end
   end
-  logger.info('Using fallback model: ' .. providers.selected_model_name())
 
   state.ns_id = vim.api.nvim_create_namespace 'ai_commit_spinner'
 

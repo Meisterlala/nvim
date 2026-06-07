@@ -165,7 +165,9 @@ local function read_session_messages(db_path, session, callback, status_callback
         return
       end
 
-      logger.debug(string.format('OpenCode session context ready (session=%s title=%s transcript_chars=%d)', tostring(session.id), tostring(session.title), #transcript))
+      logger.debug(
+        string.format('OpenCode session context ready (session=%s title=%s transcript_chars=%d)', tostring(session.id), tostring(session.title), #transcript)
+      )
       callback {
         provider = 'opencode',
         label = 'OpenCode',
@@ -182,7 +184,7 @@ end
 function M.get_recent(callback, status_callback)
   local opts = config.values.opencode_context or {}
   local logger = log()
-  if opts.enabled == false then
+  if config.values.context and config.values.context.opencode == false then
     logger.debug 'OpenCode context disabled'
     callback(nil)
     return
@@ -201,7 +203,9 @@ function M.get_recent(callback, status_callback)
   if status_callback then
     status_callback 'Inspecting OpenCode session'
   end
-  logger.debug(string.format('Looking for recent OpenCode session (cwd=%s db=%s recent_ms=%s since_ms=%s)', cwd, db_path, tostring(opts.recent_ms), tostring(since_ms)))
+  logger.debug(
+    string.format('Looking for recent OpenCode session (cwd=%s db=%s recent_ms=%s since_ms=%s)', cwd, db_path, tostring(opts.recent_ms), tostring(since_ms))
+  )
   local sql = table.concat({
     'select id, title, directory, time_updated from session',
     'where directory = ' .. sql_quote(cwd),
