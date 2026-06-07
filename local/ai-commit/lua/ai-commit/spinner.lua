@@ -5,6 +5,7 @@ local state = require 'ai-commit.state'
 local M = {}
 
 local frames = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+local DEFAULT_MAX_PREVIEW_CHARS = 4000
 
 local function preview_width(bufnr)
   local win = vim.fn.bufwinid(bufnr)
@@ -37,19 +38,31 @@ local function split_long_token(token, width)
   return parts
 end
 
+local function tail_text(text, max_chars)
+  local length = vim.fn.strchars(text)
+  if length <= max_chars then
+    return text
+  end
+  return vim.fn.strcharpart(text, length - max_chars, max_chars)
+end
+
 local function wrap_line(line, width)
+  line = tail_text(line, math.max(width * (config.values.preview_lines or 5) * 2, width))
   if line == '' or vim.fn.strdisplaywidth(line) <= width then
     return { line }
   end
 
   local wrapped = {}
-  local current = ''
+  local indent = line:match '^%s*' or ''
+  local content = line:sub(#indent + 1)
+  local current = indent
+  local continuation_indent = indent ~= '' and indent or '  '
 
-  for token in line:gmatch '%S+%s*' do
+  for token in content:gmatch '%S+%s*' do
     local candidate = current .. token
-    if current ~= '' and vim.fn.strdisplaywidth(candidate) > width then
+    if current:match '%S' and vim.fn.strdisplaywidth(candidate) > width then
       table.insert(wrapped, (current:gsub('%s+$', '')))
-      current = token
+      current = continuation_indent .. token
     else
       current = candidate
     end
@@ -60,7 +73,7 @@ local function wrap_line(line, width)
         if index < #parts then
           table.insert(wrapped, part)
         else
-          current = part
+          current = continuation_indent .. part:gsub('^%s+', '')
         end
       end
     end
@@ -96,13 +109,16 @@ end
 local function preview_virt_lines(spinner, bufnr)
   local lines = {}
   local width = preview_width(bufnr)
-  for _, line in ipairs(spinner.stream_preview) do
+  local preview_lines = config.values.preview_lines or 5
+  local start = math.max(1, #spinner.stream_preview - preview_lines - 2)
+  for index = start, #spinner.stream_preview do
+    local line = spinner.stream_preview[index]
     for _, wrapped in ipairs(wrap_line(line, width)) do
       table.insert(lines, wrapped)
     end
   end
 
-  while #lines > (config.values.preview_lines or 5) do
+  while #lines > preview_lines do
     table.remove(lines, 1)
   end
 
@@ -195,6 +211,25 @@ function M.append_stream(spinner, text)
   while #spinner.stream_preview > 200 do
     table.remove(spinner.stream_preview, 1)
   end
+
+  local max_chars = config.values.preview_max_chars or DEFAULT_MAX_PREVIEW_CHARS
+  local total = 0
+  for index = #spinner.stream_preview, 1, -1 do
+    local line = spinner.stream_preview[index]
+    total = total + vim.fn.strchars(line)
+    if total > max_chars then
+      local keep = math.max(0, max_chars - (total - vim.fn.strchars(line)))
+      if keep > 0 then
+        spinner.stream_preview[index] = tail_text(line, keep)
+      else
+        table.remove(spinner.stream_preview, index)
+      end
+      for remove_index = index - 1, 1, -1 do
+        table.remove(spinner.stream_preview, remove_index)
+      end
+      break
+    end
+  end
 end
 
 ---@param spinner table|nil
@@ -217,9 +252,6 @@ function M.set_status(spinner, status_text, status_chunks)
   end
   spinner.status_text = status_text
   spinner.status_chunks = status_chunks
-  if spinner.update then
-    spinner.update()
-  end
 end
 
 ---@param bufnr integer

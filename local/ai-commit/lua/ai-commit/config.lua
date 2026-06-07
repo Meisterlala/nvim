@@ -13,6 +13,7 @@ M.values = {
   max_tokens = 32768,
   spinner_interval = 80,
   preview_lines = 5,
+  preview_max_chars = 4000,
   max_diff_chars = 100000,
   refinement = {
     enabled = true,
