@@ -1,5 +1,4 @@
 local config = require 'ai-commit.config'
-local git = require 'ai-commit.git'
 local log = require('ai-commit.log').get
 local providers = require 'ai-commit.providers'
 local session_context = require 'ai-commit.session_context'
@@ -11,7 +10,7 @@ local M = {}
 ---@param bufnr integer
 ---@return boolean
 local function buffer_has_content(bufnr)
-  local comment_char = git.comment_char()
+  local comment_char = session_context.comment_char()
   for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
     if not line:match('^' .. vim.pesc(comment_char)) and line:match '%S' then
       return true
@@ -108,31 +107,6 @@ function M.insert()
   local done = false
   local aborted = false
   local http_jobs = {}
-  local context_opts = config.values.context or {}
-  local include_recent_commits = context_opts.recent_commits ~= false
-  local include_opencode = context_opts.opencode ~= false
-  local include_staged_changes = context_opts.staged_changes ~= false
-  local refinement_opts = config.values.refinement or {}
-  local refinement_context_opts = refinement_opts.include_context or {}
-  local include_refinement_commits = refinement_opts.enabled ~= false
-    and refinement_opts.recent_commits_with_body ~= false
-    and refinement_context_opts.recent_commits ~= false
-  local context_total = 2
-  if include_recent_commits then
-    context_total = context_total + 1
-  end
-  if include_opencode then
-    context_total = context_total + 1
-  end
-  if include_staged_changes then
-    context_total = context_total + 1
-  end
-  if include_refinement_commits then
-    context_total = context_total + 1
-  end
-  local context_done = 0
-  local pending = context_total
-  local failed = false
   local last_status_line = nil
   local context = {}
 
@@ -210,132 +184,40 @@ function M.insert()
     end,
   })
 
-  local function mark_done()
+  session_context.collect(function(collected_context)
     if done then
       return
     end
-    context_done = context_done + 1
-    status(string.format('Preparing context (%d/%d)', context_done, context_total))
-    pending = pending - 1
-    if pending == 0 and not failed then
-      providers.generate_commit_message(
-        context.branch,
-        context.recent_commits,
-        context.session_summary,
-        context.diff_stat,
-        context.diff,
-        context.refinement_recent_commits,
-        function(message)
-          finalize(message)
-        end,
-        status,
-        vim.tbl_extend('force', request_context, { status_action = 'Generating commit message' })
-      )
-    elseif failed then
-      finalize(nil)
-    end
-  end
-
-  status(string.format('Preparing context (%d/%d)', context_done, context_total))
-
-  git.current_branch(function(branch)
-    if done then
-      return
-    end
-    context.branch = branch
-    logger.debug('Git branch context ready: ' .. tostring(branch))
-    mark_done()
-  end)
-
-  if include_recent_commits then
-    git.recent_commits(5, function(commits)
-      if done then
-        return
-      end
-      context.recent_commits = commits
-      logger.debug('Recent commit context ready (chars=' .. tostring(#commits) .. ')')
-      mark_done()
-    end)
-  end
-
-  if include_refinement_commits then
-    git.recent_commits(5, function(commits)
-      if done then
-        return
-      end
-      context.refinement_recent_commits = commits
-      logger.debug('Refinement recent commit context ready (chars=' .. tostring(#commits) .. ')')
-      mark_done()
-    end, true)
-  end
-
-  if include_opencode then
-    session_context.get_recent(function(session)
-      if done then
-        return
-      end
-      if not session then
-        logger.debug 'No assistant session context available'
-        mark_done()
-        return
-      end
-      logger.debug(
-        'Assistant session context loaded (provider='
-          .. tostring(session.label or session.provider)
-          .. ' transcript_chars='
-          .. tostring(#(session.transcript or ''))
-          .. ')'
-      )
-      providers.summarize_session(session, function(summary)
-        if done then
-          return
-        end
-        context.session_summary = summary
-        logger.debug('Assistant session summary ready (chars=' .. tostring(summary and #summary or 0) .. ')')
-        mark_done()
-      end, status, request_context)
-    end, status)
-  end
-
-  if include_staged_changes then
-    git.staged_diff(function(diff, diff_meta)
-      if done then
-        return
-      end
-      if not diff then
-        failed = true
-        finalize(nil)
-        return
-      end
-      context.diff = diff
-      context.diff_meta = diff_meta
-      logger.debug(
-        string.format(
-          'Staged diff context ready (chars=%d changed_lines=%s context_lines=%s truncated=%s original_chars=%s)',
-          #diff,
-          tostring(diff_meta and diff_meta.changed_lines),
-          tostring(diff_meta and diff_meta.context_lines),
-          tostring(diff_meta and diff_meta.truncated),
-          tostring(diff_meta and diff_meta.original_chars)
-        )
-      )
-      mark_done()
-    end)
-  end
-
-  git.staged_diff_stat(function(diff_stat)
-    if done then
-      return
-    end
-    if not diff_stat then
-      failed = true
+    if not collected_context then
       finalize(nil)
       return
     end
-    context.diff_stat = diff_stat
-    logger.debug('Staged diff stat context ready (chars=' .. tostring(#diff_stat) .. ')')
-    mark_done()
-  end)
+    context = collected_context
+    providers.generate_commit_message(
+      context.branch,
+      context.recent_commits,
+      context.session_summary,
+      context.diff_stat,
+      context.diff,
+      context.refinement_recent_commits,
+      function(message)
+        finalize(message)
+      end,
+      status,
+      vim.tbl_extend('force', request_context, { status_action = 'Generating commit message' })
+    )
+  end, {
+    is_cancelled = function()
+      return done or aborted
+    end,
+    on_update = function(updated_context)
+      context = updated_context
+    end,
+    status_callback = status,
+    summarize_session = function(session, callback)
+      providers.summarize_session(session, callback, status, request_context)
+    end,
+  })
 end
 
 return M
