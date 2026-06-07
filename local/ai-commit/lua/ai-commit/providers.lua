@@ -1,30 +1,68 @@
 local config = require 'ai-commit.config'
+local heuristics = require 'ai-commit.heuristics'
 local log = require('ai-commit.log').get
 local prompts = require 'ai-commit.prompts'
 local util = require 'ai-commit.util'
 
 local M = {}
 
-local function dump_prompt(prompt)
+local function sanitize_filename_part(value)
+  value = tostring(value or 'unknown'):gsub('[^%w_.-]+', '-')
+  value = value:gsub('^-+', ''):gsub('-+$', '')
+  return value ~= '' and value or 'unknown'
+end
+
+local function git_short_hash()
+  local hash = vim.fn.system({ 'git', 'rev-parse', '--short', 'HEAD' }):gsub('%s+$', '')
+  if vim.v.shell_error ~= 0 or hash == '' then
+    return 'no-head'
+  end
+  return hash
+end
+
+local function git_current_branch()
+  local branch = vim.fn.system({ 'git', 'branch', '--show-current' }):gsub('%s+$', '')
+  if vim.v.shell_error ~= 0 or branch == '' then
+    return 'unknown'
+  end
+  return branch
+end
+
+local function dump_prompt(prompt, reason, branch)
   if config.values.log_level ~= 'debug' then
     return
   end
 
-  local path = config.values.prompt_dump_path
-  if type(path) ~= 'string' or path == '' then
+  local paths = {}
+  local dump_dir = config.values.prompt_dump_dir
+  if type(dump_dir) == 'string' and dump_dir ~= '' then
+    local timestamp = os.date '%Y%m%d-%H%M%S'
+    local filename = string.format(
+      '%s-%s-%s-%s.md',
+      timestamp,
+      sanitize_filename_part(branch or git_current_branch()),
+      sanitize_filename_part(git_short_hash()),
+      sanitize_filename_part(reason or 'prompt')
+    )
+    table.insert(paths, dump_dir .. '/' .. filename)
+  end
+
+  if #paths == 0 then
     return
   end
 
   local logger = log()
-  local ok, err = pcall(function()
-    vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
-    vim.fn.writefile(vim.split(prompt, '\n', { plain = true }), path)
-  end)
+  for _, path in ipairs(paths) do
+    local ok, err = pcall(function()
+      vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
+      vim.fn.writefile(vim.split(prompt, '\n', { plain = true }), path)
+    end)
 
-  if ok then
-    logger.debug('Commit prompt dumped to ' .. path)
-  else
-    logger.warn('Failed to dump commit prompt to ' .. path .. ': ' .. tostring(err))
+    if ok then
+      logger.debug('Commit prompt dumped to ' .. path)
+    else
+      logger.warn('Failed to dump commit prompt to ' .. path .. ': ' .. tostring(err))
+    end
   end
 end
 
@@ -54,7 +92,15 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
   local logger = log()
   local ai_provider = require 'ai-provider'
   local selection = ai_provider.get_source_selection(source_id)
-  local provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
+  local provider = selection and selection.provider or ai_provider.get_default_provider()
+
+  if not provider then
+    logger.error('No AI provider selected for source=' .. source_id)
+    vim.notify('No AI provider selected. Check :AIProvider.', vim.log.levels.ERROR)
+    callback(nil, nil)
+    return
+  end
+
   local model = selection and selection.model or ai_provider.get_selected_model(provider, source_id)
 
   if not model then
@@ -126,7 +172,7 @@ function M.complete_prompt(full_prompt, callback, status_callback, request_conte
   local ai_provider = require 'ai-provider'
   local source_id = request_context and request_context.source_id or config.message_source_id
   local selection = ai_provider.get_source_selection(source_id)
-  local provider = selection and selection.provider or ai_provider.get_default_provider() or 'ollama'
+  local provider = selection and selection.provider or ai_provider.get_default_provider()
   logger.debug(
     string.format(
       'Completing AI prompt (source=%s chars=%d provider=%s model=%s)',
@@ -140,9 +186,18 @@ function M.complete_prompt(full_prompt, callback, status_callback, request_conte
     local action = request_context and request_context.status_action
     if action and selection and selection.model then
       status_callback(action .. ' with ' .. selection.model)
+    elseif not provider then
+      status_callback 'No AI provider selected'
     else
       status_callback('Checking ' .. provider)
     end
+  end
+
+  if not provider then
+    logger.error('No AI provider selected for source=' .. source_id)
+    vim.notify('No AI provider selected. Check :AIProvider.', vim.log.levels.ERROR)
+    callback(nil, nil)
+    return
   end
 
   ai_provider.check(provider, function(working)
@@ -186,6 +241,7 @@ function M.summarize_session(session, callback, status_callback, request_context
       #prompt
     )
   )
+  dump_prompt(prompt, 'opencode-summary')
   local summary_context = child_request_context(request_context, {
     source_id = config.summary_source_id,
     status_action = 'Summarizing ' .. session_label .. ' session',
@@ -202,15 +258,7 @@ function M.summarize_session(session, callback, status_callback, request_context
   end, status_callback, summary_context)
 end
 
----@param branch string
----@param recent_commits string
----@param session_summary string|nil
----@param diff_stat string
----@param diff string
----@param callback function(string|nil, table|nil)
----@param status_callback function(string)|nil
----@param request_context table|nil
-function M.generate_commit_message(branch, recent_commits, session_summary, diff_stat, diff, callback, status_callback, request_context)
+local function generation_sections(recent_commits, session_summary, diff_stat, diff)
   local sections = {}
   if type(diff_stat) == 'string' and not diff_stat:match '^%s*$' then
     table.insert(sections, { title = 'Staged files', body = diff_stat, fenced = true })
@@ -224,6 +272,106 @@ function M.generate_commit_message(branch, recent_commits, session_summary, diff
   if type(diff) == 'string' and not diff:match '^%s*$' then
     table.insert(sections, { title = 'Staged changes', body = diff, fenced = true })
   end
+  return sections
+end
+
+local function refinement_sections(context)
+  local refinement = config.values.refinement or {}
+  local include = refinement.include_context or {}
+  local sections = {}
+
+  if include.staged_files ~= false and type(context.diff_stat) == 'string' and not context.diff_stat:match '^%s*$' then
+    table.insert(sections, { title = 'Staged files', body = context.diff_stat, fenced = true })
+  end
+  if include.recent_commits ~= false then
+    local commits = context.refinement_recent_commits or context.recent_commits
+    if type(commits) == 'string' and not commits:match '^%s*$' then
+      table.insert(sections, { title = 'Recent commits with bodies', body = commits })
+    end
+  end
+  if include.session_context ~= false and type(context.session_summary) == 'string' and not context.session_summary:match '^%s*$' then
+    table.insert(sections, { title = 'Recent assistant session context', body = context.session_summary })
+  end
+  if include.staged_changes ~= false and type(context.diff) == 'string' and not context.diff:match '^%s*$' then
+    table.insert(sections, { title = 'Staged changes', body = context.diff, fenced = true })
+  end
+
+  return sections
+end
+
+local function maybe_refine_message(context, message, iteration, callback, status_callback, request_context)
+  message = heuristics.normalize(message) or message
+  local refinement = config.values.refinement or {}
+  if refinement.enabled == false then
+    callback(message)
+    return
+  end
+
+  local validation = heuristics.validate(message)
+  if validation.valid then
+    if validation.warnings and #validation.warnings > 0 then
+      log().debug('Commit message passed heuristics with warnings: ' .. table.concat(validation.warnings, '; '))
+    end
+    log().debug('Commit message passed heuristics after ' .. tostring(iteration) .. ' refinement(s)')
+    callback(message)
+    return
+  end
+
+  local max_iterations = tonumber(refinement.max_iterations) or 0
+  if iteration >= max_iterations then
+    log().warn('Commit message failed heuristics after max refinements: ' .. heuristics.format_failures(validation):gsub('\n', '; '))
+    callback(message)
+    return
+  end
+
+  local next_iteration = iteration + 1
+  local failures = heuristics.format_failures(validation)
+  local prompt = prompts.refine_commit(context.branch or 'unknown', message or '', failures, refinement_sections(context))
+  log().debug(string.format('Refinement prompt built (iteration=%d prompt_chars=%d failures=%d)', next_iteration, #prompt, #validation.failures))
+  dump_prompt(prompt, 'refinement-' .. tostring(next_iteration), context.branch)
+
+  local refinement_context = child_request_context(request_context, {
+    source_id = config.message_source_id,
+    status_action = 'Refining commit message ' .. tostring(next_iteration),
+  })
+  M.complete_prompt(prompt, function(refined_message)
+    if not refined_message then
+      callback(nil)
+      return
+    end
+    maybe_refine_message(context, refined_message, next_iteration, callback, status_callback, request_context)
+  end, status_callback, refinement_context)
+end
+
+---@param branch string
+---@param recent_commits string
+---@param session_summary string|nil
+---@param diff_stat string
+---@param diff string
+---@param refinement_recent_commits string|nil
+---@param callback function(string|nil, table|nil)
+---@param status_callback function(string)|nil
+---@param request_context table|nil
+function M.generate_commit_message(
+  branch,
+  recent_commits,
+  session_summary,
+  diff_stat,
+  diff,
+  refinement_recent_commits,
+  callback,
+  status_callback,
+  request_context
+)
+  local context = {
+    branch = branch,
+    recent_commits = recent_commits,
+    refinement_recent_commits = refinement_recent_commits,
+    session_summary = session_summary,
+    diff_stat = diff_stat,
+    diff = diff,
+  }
+  local sections = generation_sections(recent_commits, session_summary, diff_stat, diff)
   local prompt = prompts.commit(branch, sections)
   log().debug(
     string.format(
@@ -237,11 +385,19 @@ function M.generate_commit_message(branch, recent_commits, session_summary, diff
       session_summary and 'yes' or 'no'
     )
   )
-  dump_prompt(prompt)
+  dump_prompt(prompt, 'generate-message', branch)
   request_context = child_request_context(request_context, {
     source_id = config.message_source_id,
   })
-  M.complete_prompt(prompt, callback, status_callback, request_context)
+  M.complete_prompt(prompt, function(message, meta)
+    if not message then
+      callback(nil, meta)
+      return
+    end
+    maybe_refine_message(context, message, 0, function(final_message)
+      callback(final_message, meta)
+    end, status_callback, request_context)
+  end, status_callback, request_context)
 end
 
 return M

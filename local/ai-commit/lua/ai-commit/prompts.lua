@@ -27,11 +27,16 @@ SPECIFICATION (https://www.conventionalcommits.org/en/v1.0.0/):
 14. Types other than feat and fix MAY be used in your commit messages, e.g., docs: update ref docs.
 
 ADDITIONAL GUIDELINES:
-- Description: Use lowercase, imperative mood, no ending period, max 50 chars
+- Description: Use lowercase, imperative mood, no ending period, target max 100 chars
 - Header Only: Most of the time, ONLY output the single header line (type[scope]: description).
+- Header: DO NOT use vague descriptions like `update stuff`, `fix bug`, or `misc changes`.
 - Body: FORBIDDEN for 75% of commits. DO NOT include a body for small changes, simple fixes, or minor features.
 - Body: ONLY include a body if the change is a massive architectural shift, highly complex, or a BREAKING CHANGE.
-- Body Formatting: If a body is absolutely necessary, wrap at 72 chars, explain WHAT and WHY (not HOW). DO NOT ramble or over-explain.
+- Body: DO mention user/API/data/security/deployment impact when relevant.
+- Body: DO mention tradeoffs or known limitations only if future maintainers need them.
+- Body: DO use neutral factual tone; DO NOT use jokes, apologies, blame, or uncertainty.
+- Body: DO NOT list changed files/functions unless the location itself matters.
+- Body Formatting: If a body is absolutely necessary, wrap at 80 chars, explain WHAT and WHY (not HOW). DO NOT ramble or over-explain.
 - Type casing: Any casing may be used, but be consistent (prefer lowercase)
 - SemVer relationship: fix = PATCH, feat = MINOR, BREAKING CHANGE = MAJOR
 - Revert commits: Use "revert" type with footer referencing commit SHAs
@@ -55,6 +60,43 @@ function M.commit(branch, sections)
   end
 
   table.insert(parts, 'Generate ONLY the commit message following the specification above:')
+  return table.concat(parts, '\n\n')
+end
+
+---@param branch string
+---@param message string
+---@param failures string
+---@param sections table[]
+---@return string
+function M.refine_commit(branch, message, failures, sections)
+  message = vim.trim(message or '')
+  message = message:gsub('```', '` ` `')
+  local parts = {
+    M.commit_header,
+    'Current branch: ' .. branch,
+    'Previously generated commit message:',
+    '```\n' .. message .. '\n```',
+    'Heuristic failures:',
+    failures or 'Unknown failure.',
+    table.concat({
+      'Refinement constraints:',
+      'Return a commit message, not an explanation. Do not copy these constraints into the commit message.',
+      'Prefer one short first line only. If a body is necessary, keep it plain text, wrapped at 80 chars, and without bullets.',
+      'Do not use ! or BREAKING CHANGE unless the staged files clearly show removed or changed public behavior.',
+    }, '\n'),
+  }
+
+  for _, section in ipairs(sections or {}) do
+    if section.body and section.body ~= '' then
+      if section.fenced then
+        table.insert(parts, section.title .. ':\n```\n' .. section.body .. '\n```')
+      else
+        table.insert(parts, section.title .. ':\n' .. section.body)
+      end
+    end
+  end
+
+  table.insert(parts, 'Output ONLY the corrected commit message:')
   return table.concat(parts, '\n\n')
 end
 

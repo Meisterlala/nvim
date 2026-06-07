@@ -39,6 +39,9 @@ local function set_stage_status(spinner, stage_text, diff_meta, last_status_line
     active_prefix, active_model, active_suffix = stage_text:match '^(Generating commit message with )(.+)( %(.- t/s%))$'
   end
   if not active_prefix then
+    active_prefix, active_model, active_suffix = stage_text:match '^(Refining commit message %d+ with )(.+)( %(.- t/s%))$'
+  end
+  if not active_prefix then
     active_prefix, active_model, active_suffix = stage_text:match '^(Summarizing OpenCode session with )(.+)( %(.- t/s%))$'
   end
   if not active_prefix then
@@ -49,6 +52,9 @@ local function set_stage_status(spinner, stage_text, diff_meta, last_status_line
   end
   if not active_prefix then
     active_prefix, active_model = stage_text:match '^(Generating commit message with )(.+)$'
+  end
+  if not active_prefix then
+    active_prefix, active_model = stage_text:match '^(Refining commit message %d+ with )(.+)$'
   end
   if not active_prefix then
     active_prefix, active_model = stage_text:match '^(Summarizing OpenCode session with )(.+)$'
@@ -106,6 +112,11 @@ function M.insert()
   local include_recent_commits = context_opts.recent_commits ~= false
   local include_opencode = context_opts.opencode ~= false
   local include_staged_changes = context_opts.staged_changes ~= false
+  local refinement_opts = config.values.refinement or {}
+  local refinement_context_opts = refinement_opts.include_context or {}
+  local include_refinement_commits = refinement_opts.enabled ~= false
+    and refinement_opts.recent_commits_with_body ~= false
+    and refinement_context_opts.recent_commits ~= false
   local context_total = 2
   if include_recent_commits then
     context_total = context_total + 1
@@ -114,6 +125,9 @@ function M.insert()
     context_total = context_total + 1
   end
   if include_staged_changes then
+    context_total = context_total + 1
+  end
+  if include_refinement_commits then
     context_total = context_total + 1
   end
   local context_done = 0
@@ -204,9 +218,19 @@ function M.insert()
     status(string.format('Preparing context (%d/%d)', context_done, context_total))
     pending = pending - 1
     if pending == 0 and not failed then
-      providers.generate_commit_message(context.branch, context.recent_commits, context.session_summary, context.diff_stat, context.diff, function(message)
-        finalize(message)
-      end, status, vim.tbl_extend('force', request_context, { status_action = 'Generating commit message' }))
+      providers.generate_commit_message(
+        context.branch,
+        context.recent_commits,
+        context.session_summary,
+        context.diff_stat,
+        context.diff,
+        context.refinement_recent_commits,
+        function(message)
+          finalize(message)
+        end,
+        status,
+        vim.tbl_extend('force', request_context, { status_action = 'Generating commit message' })
+      )
     elseif failed then
       finalize(nil)
     end
@@ -232,6 +256,17 @@ function M.insert()
       logger.debug('Recent commit context ready (chars=' .. tostring(#commits) .. ')')
       mark_done()
     end)
+  end
+
+  if include_refinement_commits then
+    git.recent_commits(5, function(commits)
+      if done then
+        return
+      end
+      context.refinement_recent_commits = commits
+      logger.debug('Refinement recent commit context ready (chars=' .. tostring(#commits) .. ')')
+      mark_done()
+    end, true)
   end
 
   if include_opencode then

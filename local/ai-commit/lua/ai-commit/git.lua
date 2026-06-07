@@ -30,11 +30,16 @@ end
 
 ---@param count integer
 ---@param callback function(string)
-function M.recent_commits(count, callback)
+---@param include_body boolean|nil
+function M.recent_commits(count, callback, include_body)
   local Job = require 'plenary.job'
+  local args = { 'log', '-n', tostring(count or 5), '--format=%h %s' }
+  if include_body then
+    args = { 'log', '-n', tostring(count or 5), '--format=%h %s%n%b%n---' }
+  end
   Job:new({
     command = 'git',
-    args = { 'log', '-n', tostring(count or 5), '--format=%h %s' },
+    args = args,
     on_exit = vim.schedule_wrap(function(job, code)
       if code ~= 0 then
         callback 'No recent commits available'

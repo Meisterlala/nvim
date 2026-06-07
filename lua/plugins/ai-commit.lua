@@ -5,7 +5,11 @@ return {
   ft = 'gitcommit',
   cmd = { 'AICommit', 'AICommitModel' },
   dependencies = { 'nvim-lua/plenary.nvim', 'ai-provider' },
-  opts = {},
+  opts = {
+    refinement = {
+      max_iterations = 5,
+    },
+  },
   config = function(_, opts)
     require('ai-commit').setup(opts)
   end,
