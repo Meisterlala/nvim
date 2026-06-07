@@ -200,7 +200,7 @@ local function read_session_messages(db_path, session, callback, status_callback
   local logger = log()
   local Job = require 'plenary.job'
   if status_callback then
-    status_callback 'Reading OpenCode session'
+    status_callback 'OpenCode: Loading session context'
   end
   logger.debug('Reading OpenCode session messages for session=' .. tostring(session.id))
   local sql = table.concat({
@@ -271,7 +271,7 @@ function M.get_recent(callback, status_callback)
   local cwd = vim.fn.getcwd()
   local since_ms = math.floor(os.time() * 1000) - (opts.recent_ms or 60 * 60 * 1000)
   if status_callback then
-    status_callback 'Inspecting OpenCode session'
+    status_callback 'OpenCode: Loading session context'
   end
   logger.debug(
     string.format('Looking for recent OpenCode session (cwd=%s db=%s recent_ms=%s since_ms=%s)', cwd, db_path, tostring(opts.recent_ms), tostring(since_ms))

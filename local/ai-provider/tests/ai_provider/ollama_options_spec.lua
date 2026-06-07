@@ -30,7 +30,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b 64k',
       prompt = 'Reply with exactly: ok',
-      preload = false,
       max_tokens = 4,
       provider_config = {
         context_size = 1024 * 8,
@@ -75,7 +74,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b 32k',
       prompt = 'Reply with exactly: ok',
-      preload = false,
       context_size = 1024 * 16,
       keep_alive = '10m',
       provider_config = {
@@ -115,7 +113,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'qwen3.5:4b 256k',
       prompt = 'Reply with exactly: ok',
-      preload = false,
       provider_config = {
         models = {
           ['qwen3.5:4b 256k'] = {
@@ -151,7 +148,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b',
       prompt = 'large prompt',
-      preload = false,
       callback = function(result, result_meta)
         message = result
         meta = result_meta
@@ -182,7 +178,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b',
       prompt = 'Reply with exactly: ok',
-      preload = false,
       on_status = function(status)
         table.insert(statuses, status)
       end,
@@ -193,7 +188,7 @@ describe('ollama provider options', function()
       return #statuses >= 4
     end, 10)
 
-    assert.are.same('generating', statuses[1].phase)
+    assert.are.same('context', statuses[1].phase)
     assert.are.same('thinking', statuses[2].phase)
     assert.are.same(7, statuses[2].tokens_per_second)
     assert.are.same('generating', statuses[3].phase)
@@ -218,7 +213,6 @@ describe('ollama provider options', function()
     ollama.chat {
       model = 'gemma4:e2b',
       prompt = 'Reply with exactly: ok',
-      preload = false,
       on_status = function(status)
         table.insert(statuses, status)
       end,
@@ -229,11 +223,82 @@ describe('ollama provider options', function()
       return #statuses >= 4
     end, 10)
 
+    assert.are.same('context', statuses[1].phase)
     assert.are.same('thinking', statuses[2].phase)
     assert.is_number(statuses[2].tokens_per_second)
     assert.are.same('generating', statuses[3].phase)
     assert.is_number(statuses[3].tokens_per_second)
     assert.are.same('done', statuses[4].phase)
     assert.are.same(9, statuses[4].tokens_per_second)
+  end)
+
+  it('checks loaded models before chat and skips loading status when resident', function()
+    package.loaded['ai-provider.curl'] = {
+      json = function(request)
+        assert.matches('/api/ps$', request.url)
+        request.callback { status = 200, json = { models = { { name = 'gemma4:e2b' } } } }
+        return { shutdown = function() end }
+      end,
+      stream_json_lines = function(request)
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' } }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+    local statuses = {}
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'Reply with exactly: ok',
+      on_status = function(status)
+        table.insert(statuses, status.phase)
+      end,
+      callback = function() end,
+    }
+
+    vim.wait(1000, function()
+      return #statuses >= 3
+    end, 10)
+
+    assert.are.same('loaded', statuses[1])
+    assert.are.same('context', statuses[2])
+    assert.are.same('generating', statuses[3])
+  end)
+
+  it('checks loaded models before chat and reports loading when absent', function()
+    package.loaded['ai-provider.curl'] = {
+      json = function(request)
+        assert.matches('/api/ps$', request.url)
+        request.callback { status = 200, json = { models = {} } }
+        return { shutdown = function() end }
+      end,
+      stream_json_lines = function(request)
+        request.on_json_line { model = 'gemma4:e2b', message = { content = 'ok' } }
+        request.callback(0)
+        return { shutdown = function() end }
+      end,
+    }
+
+    local ollama = require 'ai-provider.providers.ollama'
+    local statuses = {}
+
+    ollama.chat {
+      model = 'gemma4:e2b',
+      prompt = 'Reply with exactly: ok',
+      on_status = function(status)
+        table.insert(statuses, status.phase)
+      end,
+      callback = function() end,
+    }
+
+    vim.wait(1000, function()
+      return #statuses >= 3
+    end, 10)
+
+    assert.are.same('loading', statuses[1])
+    assert.are.same('context', statuses[2])
+    assert.are.same('generating', statuses[3])
   end)
 end)

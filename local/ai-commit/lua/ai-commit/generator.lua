@@ -28,49 +28,44 @@ local function set_stage_status(spinner, stage_text, diff_meta, last_status_line
   local suffix = diff_meta and diff_meta.truncated and ' [truncated]' or ''
   local status_line = stage_text .. suffix
   local status_chunks = { { status_line, 'Comment' } }
-  local waiting_prefix = 'Waiting for response from '
-  local active_prefix, active_model, active_suffix = stage_text:match '^(Thinking with )(.+)( %(.- t/s%))$'
+  local active_prefix, active_model, active_suffix = stage_text:match '^(Generating commit message with )(.+)( %(.-%))$'
 
   if not active_prefix then
-    active_prefix, active_model, active_suffix = stage_text:match '^(Generating response with )(.+)( %(.- t/s%))$'
+    active_prefix, active_model, active_suffix = stage_text:match '^(OpenCode: Summarizing session with )(.+)( %(.-%))$'
   end
   if not active_prefix then
-    active_prefix, active_model, active_suffix = stage_text:match '^(Generating commit message with )(.+)( %(.- t/s%))$'
-  end
-  if not active_prefix then
-    active_prefix, active_model, active_suffix = stage_text:match '^(Refining commit message %d+ with )(.+)( %(.- t/s%))$'
-  end
-  if not active_prefix then
-    active_prefix, active_model, active_suffix = stage_text:match '^(Summarizing OpenCode session with )(.+)( %(.- t/s%))$'
-  end
-  if not active_prefix then
-    active_prefix, active_model = stage_text:match '^(Thinking with )(.+)$'
-  end
-  if not active_prefix then
-    active_prefix, active_model = stage_text:match '^(Generating response with )(.+)$'
+    active_prefix, active_model, active_suffix = stage_text:match '^(%d+%. Refinement with )(.+)( %(.-%))$'
   end
   if not active_prefix then
     active_prefix, active_model = stage_text:match '^(Generating commit message with )(.+)$'
   end
   if not active_prefix then
-    active_prefix, active_model = stage_text:match '^(Refining commit message %d+ with )(.+)$'
+    active_prefix, active_model = stage_text:match '^(Ollama: Loading model )(.+)$'
   end
   if not active_prefix then
-    active_prefix, active_model = stage_text:match '^(Summarizing OpenCode session with )(.+)$'
+    active_prefix, active_model = stage_text:match '^(Ollama: Loaded model )(.+)$'
+  end
+  if not active_prefix then
+    active_prefix, active_model, active_suffix = stage_text:match '^(Generating response with )(.+)( %(.-%))$'
+  end
+  if not active_prefix then
+    active_prefix, active_model, active_suffix = stage_text:match '^(Thinking with )(.+)( %(.-%))$'
+  end
+  if not active_prefix then
+    active_prefix, active_model = stage_text:match '^(Generating response with )(.+)$'
+  end
+  if not active_prefix then
+    active_prefix, active_model = stage_text:match '^(Thinking with )(.+)$'
   end
 
-  if vim.startswith(stage_text, waiting_prefix) then
-    status_chunks = {
-      { waiting_prefix, 'Comment' },
-      { stage_text:sub(#waiting_prefix + 1), config.values.model_highlight_group },
-    }
-  elseif active_prefix and active_model then
+  if active_prefix and active_model then
     status_chunks = {
       { active_prefix, 'Comment' },
       { active_model, config.values.model_highlight_group },
     }
     if active_suffix then
-      table.insert(status_chunks, { active_suffix, 'Number' })
+      local suffix_group = active_suffix:find 't/s' and 'Number' or 'Comment'
+      table.insert(status_chunks, { active_suffix, suffix_group })
     end
   end
   if suffix ~= '' and #status_chunks > 1 then

@@ -69,26 +69,20 @@ function M.collect(callback, opts)
   local logger = log()
   local plan = collection_plan(opts)
   local context = {}
-  local total = 2
-  local done_count = 0
-  local pending = total
+  local pending = 2
   local failed = false
   local finished = false
 
   if plan.recent_commits then
-    total = total + 1
     pending = pending + 1
   end
   if plan.opencode then
-    total = total + 1
     pending = pending + 1
   end
   if plan.staged_changes then
-    total = total + 1
     pending = pending + 1
   end
   if plan.refinement_recent_commits then
-    total = total + 1
     pending = pending + 1
   end
 
@@ -120,8 +114,6 @@ function M.collect(callback, opts)
     if is_cancelled() or finished then
       return
     end
-    done_count = done_count + 1
-    status(string.format('Preparing context (%d/%d)', done_count, total))
     pending = pending - 1
     notify_update()
     if pending == 0 and not failed then
@@ -137,7 +129,6 @@ function M.collect(callback, opts)
   end
 
   notify_update()
-  status(string.format('Preparing context (%d/%d)', done_count, total))
 
   git.current_branch(function(branch)
     if is_cancelled() or finished then

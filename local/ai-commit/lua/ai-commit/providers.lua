@@ -70,6 +70,13 @@ local function child_request_context(request_context, overrides)
   return vim.tbl_extend('force', request_context or {}, overrides or {})
 end
 
+local function provider_label(provider)
+  if type(provider) ~= 'string' or provider == '' then
+    return 'AI provider'
+  end
+  return provider:sub(1, 1):upper() .. provider:sub(2)
+end
+
 function M.select_model()
   local logger = log()
   local ai_provider = require 'ai-provider'
@@ -110,23 +117,19 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
     return
   end
 
-  if status_callback then
-    local action = request_context and request_context.status_action
-    status_callback(action and (action .. ' with ' .. model) or ('Waiting for response from ' .. model))
-  end
-
   local function report_provider_status(status)
     if not status_callback or type(status) ~= 'table' then
       return
     end
     local status_model = status.model or model
     local action = request_context and request_context.status_action
+    local label = provider_label(status.provider or provider)
     if status.phase == 'loading' then
-      status_callback(action and (action .. ' with ' .. status_model) or ('Loading model ' .. status_model))
+      status_callback(label .. ': Loading model ' .. status_model)
     elseif status.phase == 'loaded' then
-      status_callback('Loaded model ' .. status_model)
+      status_callback(label .. ': Loaded model ' .. status_model)
     elseif status.phase == 'context' then
-      status_callback('Loading prompt context with ' .. status_model)
+      status_callback((action or 'Generating response') .. ' with ' .. status_model .. ' (loading context)')
     elseif status.phase == 'thinking' then
       local suffix = status.tokens_per_second and string.format(' (%.1f t/s)', status.tokens_per_second) or ''
       status_callback((action or 'Thinking') .. ' with ' .. status_model .. suffix)
@@ -147,7 +150,6 @@ local function complete_ai_provider(source_id, full_prompt, callback, status_cal
     model = model,
     prompt = full_prompt,
     stream = true,
-    preload = true,
     max_tokens = config.values.max_tokens,
     is_cancelled = request_context and request_context.is_cancelled,
     register_http_job = request_context and request_context.register_http_job,
@@ -189,13 +191,10 @@ function M.complete_prompt(full_prompt, callback, status_callback, request_conte
     )
   )
   if status_callback then
-    local action = request_context and request_context.status_action
-    if action and selection and selection.model then
-      status_callback(action .. ' with ' .. selection.model)
-    elseif not provider then
+    if not provider then
       status_callback 'No AI provider selected'
     else
-      status_callback('Checking ' .. provider)
+      status_callback(provider_label(provider) .. ': Checking')
     end
   end
 
@@ -234,7 +233,7 @@ function M.summarize_session(session, callback, status_callback, request_context
 
   local session_label = session.label or session.provider or 'assistant'
   if status_callback then
-    status_callback('Summarizing ' .. session_label .. ' session')
+    status_callback(session_label .. ': Loading session context')
   end
 
   local prompt = string.format(prompts.session_summary, session_label, session.title or 'Untitled', session.directory or 'unknown', session.transcript or '')
@@ -250,7 +249,7 @@ function M.summarize_session(session, callback, status_callback, request_context
   dump_prompt(prompt, 'opencode-summary')
   local summary_context = child_request_context(request_context, {
     source_id = config.summary_source_id,
-    status_action = 'Summarizing ' .. session_label .. ' session',
+    status_action = session_label .. ': Summarizing session',
   })
 
   M.complete_prompt(prompt, function(summary)
@@ -338,7 +337,7 @@ local function maybe_refine_message(context, message, iteration, callback, statu
 
   local refinement_context = child_request_context(request_context, {
     source_id = config.message_source_id,
-    status_action = 'Refining commit message ' .. tostring(next_iteration),
+    status_action = tostring(next_iteration) .. '. Refinement',
   })
   M.complete_prompt(prompt, function(refined_message)
     if not refined_message then

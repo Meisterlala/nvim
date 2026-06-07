@@ -3,13 +3,15 @@ local curl = require 'ai-provider.curl'
 local log = require 'ai-provider.log'
 
 local DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
-local HEALTH_CACHE_TTL = 30
-local DEFAULT_LOAD_TIMEOUT = 120000
+local HEALTH_CACHE_TTL = 60
+local MODEL_CACHE_TTL = 60
 local STATUS_THROTTLE_MS = 100
 
 local state = {
   health = nil,
   health_checked_at = 0,
+  loaded_models = {},
+  loaded_models_checked_at = 0,
 }
 
 local function endpoint()
@@ -64,6 +66,40 @@ local function estimate_token_count(text)
     return 0
   end
   return math.max(1, math.floor((#text / 4) + 0.5))
+end
+
+local function canonical_model_name(model)
+  if type(model) ~= 'string' then
+    return nil
+  end
+  return model:match '^([^:]+:[^%s]+)' or model
+end
+
+local function cache_loaded_model(model)
+  local name = canonical_model_name(model)
+  if name then
+    state.loaded_models[name] = true
+    state.loaded_models_checked_at = os.time()
+  end
+end
+
+local function cached_model_loaded(model)
+  local name = canonical_model_name(model)
+  if not name or os.time() - state.loaded_models_checked_at >= MODEL_CACHE_TTL then
+    return nil
+  end
+  return state.loaded_models[name] == true
+end
+
+local function update_loaded_model_cache(models)
+  state.loaded_models = {}
+  for _, model in ipairs(models or {}) do
+    local name = canonical_model_name(type(model) == 'table' and model.name or model)
+    if name then
+      state.loaded_models[name] = true
+    end
+  end
+  state.loaded_models_checked_at = os.time()
 end
 
 function M.check(callback, opts)
@@ -252,6 +288,9 @@ function M.chat(request)
         metrics.prompt_eval_duration = data.prompt_eval_duration or metrics.prompt_eval_duration
         metrics.eval_count = data.eval_count or metrics.eval_count
         metrics.eval_duration = data.eval_duration or metrics.eval_duration
+        if data.model then
+          cache_loaded_model(data.model)
+        end
         local thinking = data.message and data.message.thinking or ''
         local chunk = data.message and data.message.content or ''
         if not generation_started_at and (thinking ~= '' or chunk ~= '') then
@@ -418,99 +457,54 @@ function M.chat(request)
   end
 
   local job = nil
-  local load_timeout = request.load_timeout or provider_config.load_timeout or DEFAULT_LOAD_TIMEOUT
-  if request.preload == true or provider_config.preload == true then
-    emit_status {
-      phase = 'loading',
-      message = 'Loading model',
-    }
-    log.info(
-      string.format(
-        'ollama preload start selected_model=%s raw_model=%s context_size=%s keep_alive=%s load_timeout=%s',
-        tostring(selected_model),
-        tostring(raw_model),
-        tostring(context_size),
-        tostring(keep_alive),
-        tostring(load_timeout)
-      )
-    )
-    local preload_body = {
-      model = raw_model,
-      messages = { { role = 'user', content = 'ok' } },
-      stream = false,
-      keep_alive = keep_alive,
-      options = {
-        num_ctx = context_size,
-        num_predict = 16,
-      },
-    }
-    if think ~= nil then
-      preload_body.think = think
+  local function start_chat(model_loaded)
+    if model_loaded == true then
+      emit_status {
+        phase = 'loaded',
+        message = 'Model loaded',
+      }
+    elseif model_loaded == false then
+      emit_status {
+        phase = 'loading',
+        message = 'Loading model',
+      }
     end
 
+    emit_status {
+      phase = 'context',
+      message = 'Loading prompt context',
+    }
+    job = run_chat()
+    if request.register_http_job then
+      request.register_http_job(job)
+    end
+  end
+
+  local cached_loaded = cached_model_loaded(raw_model)
+  if cached_loaded ~= nil then
+    start_chat(cached_loaded)
+  elseif curl.json then
     job = curl.json {
-      method = 'POST',
-      url = endpoint() .. '/api/chat',
-      timeout = load_timeout,
-      body = preload_body,
+      url = endpoint() .. '/api/ps',
+      timeout = request.ps_timeout or provider_config.ps_timeout or 1000,
       callback = function(response)
         if is_cancelled(request) then
           return
         end
 
-        if response.status ~= 200 then
-          local error_message = response.error or response.body or 'ollama preload failed'
-          log.error('ollama preload failed status=' .. tostring(response.status) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_message))
-          if request.callback then
-            request.callback(nil, {
-              requested_model = selected_model,
-              used_model = raw_model,
-              elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6,
-              error = error_message,
-            })
-          end
-          emit_status {
-            phase = 'error',
-            message = error_message,
-          }
-          return
+        local loaded = nil
+        if response.status == 200 and type(response.json) == 'table' then
+          update_loaded_model_cache(response.json.models)
+          loaded = cached_model_loaded(raw_model)
         end
-
-        local load_duration = type(response.json) == 'table' and response.json.load_duration or nil
-        emit_status {
-          phase = 'loaded',
-          message = 'Model loaded',
-          elapsed_ms = load_duration and (load_duration / 1e6) or elapsed_ms_since(started_at),
-        }
-        log.info(
-          string.format(
-            'ollama preload complete selected_model=%s raw_model=%s status=%s load_ms=%s',
-            tostring(selected_model),
-            tostring(raw_model),
-            tostring(response.status),
-            load_duration and string.format('%.0f', load_duration / 1e6) or 'nil'
-          )
-        )
-        emit_status {
-          phase = 'context',
-          message = 'Loading prompt context',
-        }
-        job = run_chat()
-        if request.register_http_job then
-          request.register_http_job(job)
-        end
+        start_chat(loaded)
       end,
     }
+    if request.register_http_job then
+      request.register_http_job(job)
+    end
   else
-    emit_status {
-      phase = 'generating',
-      message = 'Generating response',
-    }
-    job = run_chat()
-  end
-
-  if request.register_http_job then
-    request.register_http_job(job)
+    start_chat(nil)
   end
   return job
 end

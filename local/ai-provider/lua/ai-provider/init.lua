@@ -10,7 +10,7 @@
 ---@field timeout? integer Optional provider timeout in milliseconds.
 ---@field context_size? integer Optional provider-wide default context size.
 ---@field keep_alive? string|integer Optional provider-wide keep-alive/unload timeout. Ollama accepts values like `4h`, `10m`, or `0`.
----@field load_timeout? integer Optional model preload timeout in milliseconds. Used by Ollama before the normal chat timeout starts.
+---@field ps_timeout? integer Optional loaded-model inspection timeout in milliseconds. Used by Ollama for `/api/ps` before chat.
 ---@field think? boolean Optional Ollama thinking mode override for reasoning models.
 ---@field models? table<string, string|AiProviderModelConfig> Optional logical model profiles. Keys are selectable model names.
 
@@ -61,8 +61,7 @@
 ---@field max_tokens? integer Maximum generated tokens/provider equivalent.
 ---@field context_size? integer Per-request context size override.
 ---@field keep_alive? string|integer Per-request keep-alive/unload timeout override.
----@field load_timeout? integer Per-request model preload timeout in milliseconds.
----@field preload? boolean Whether to preload the model before chat. Defaults to false; callers such as ai-commit can enable it to exclude load time from chat timeout.
+---@field ps_timeout? integer Per-request loaded-model inspection timeout in milliseconds.
 ---@field think? boolean Per-request Ollama thinking mode override.
 ---@field on_chunk? fun(chunk: string, raw: table, kind: string) Called for each streamed chunk. `kind` is `thinking` or `message`.
 ---@field on_status? fun(status: AiProviderStatus) Called with standardized provider progress updates.
