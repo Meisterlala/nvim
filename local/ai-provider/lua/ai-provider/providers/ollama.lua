@@ -6,6 +6,7 @@ local DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
 local HEALTH_CACHE_TTL = 60
 local MODEL_CACHE_TTL = 60
 local STATUS_THROTTLE_MS = 100
+local MAX_PENDING_CHUNK_CHARS = 4000
 
 local state = {
   health = nil,
@@ -186,6 +187,73 @@ function M.chat(request)
   local status_throttle_ms = request.status_interval or STATUS_THROTTLE_MS
   local generation_started_at = nil
   local streamed_token_estimate = 0
+  local pending_statuses = {}
+  local pending_status_flush_scheduled = false
+  local pending_chunks = {}
+  local pending_chunk_chars = 0
+  local pending_chunk_flush_scheduled = false
+
+  local function flush_pending_statuses()
+    pending_status_flush_scheduled = false
+    if not request.on_status or is_cancelled(request) then
+      pending_statuses = {}
+      return
+    end
+
+    local statuses = pending_statuses
+    pending_statuses = {}
+    for _, status in ipairs(statuses) do
+      request.on_status(status)
+    end
+  end
+
+  local function flush_pending_chunks()
+    pending_chunk_flush_scheduled = false
+    if not request.on_chunk or is_cancelled(request) then
+      pending_chunks = {}
+      pending_chunk_chars = 0
+      return
+    end
+
+    local chunks_to_flush = pending_chunks
+    pending_chunks = {}
+    pending_chunk_chars = 0
+    for _, item in ipairs(chunks_to_flush) do
+      request.on_chunk(item.chunk, item.data, item.kind)
+    end
+  end
+
+  local function schedule_status_flush()
+    if pending_status_flush_scheduled then
+      return
+    end
+    pending_status_flush_scheduled = true
+    vim.schedule(flush_pending_statuses)
+  end
+
+  local function schedule_chunk_flush()
+    if pending_chunk_flush_scheduled then
+      return
+    end
+    pending_chunk_flush_scheduled = true
+    vim.schedule(flush_pending_chunks)
+  end
+
+  local function queue_chunk(chunk, data, kind)
+    if not request.on_chunk or not chunk or chunk == '' then
+      return
+    end
+
+    local item = { chunk = chunk, data = data, kind = kind }
+    table.insert(pending_chunks, item)
+    pending_chunk_chars = pending_chunk_chars + #chunk
+
+    while pending_chunk_chars > MAX_PENDING_CHUNK_CHARS and #pending_chunks > 1 do
+      local removed = table.remove(pending_chunks, 1)
+      pending_chunk_chars = pending_chunk_chars - #(removed.chunk or '')
+    end
+    schedule_chunk_flush()
+  end
 
   local function approximate_stream_tokens_per_second()
     if not generation_started_at or streamed_token_estimate == 0 then
@@ -233,9 +301,12 @@ function M.chat(request)
         status.elapsed_ms
       )
     )
-    vim.schedule(function()
-      request.on_status(status)
-    end)
+    if #pending_statuses > 0 and pending_statuses[#pending_statuses].phase == phase and not important then
+      pending_statuses[#pending_statuses] = status
+    else
+      table.insert(pending_statuses, status)
+    end
+    schedule_status_flush()
   end
 
   log.info(
@@ -309,11 +380,7 @@ function M.chat(request)
             message = 'Thinking',
             tokens_per_second = status_tokens_per_second,
           }
-          if request.on_chunk then
-            vim.schedule(function()
-              request.on_chunk(thinking, data, 'thinking')
-            end)
-          end
+          queue_chunk(thinking, data, 'thinking')
         end
         if chunk ~= '' then
           table.insert(chunks, chunk)
@@ -322,11 +389,7 @@ function M.chat(request)
             message = 'Generating response',
             tokens_per_second = status_tokens_per_second,
           }
-          if request.on_chunk then
-            vim.schedule(function()
-              request.on_chunk(chunk, data, 'message')
-            end)
-          end
+          queue_chunk(chunk, data, 'message')
         end
       end,
       callback = function(code, error_message)

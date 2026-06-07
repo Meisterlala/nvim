@@ -165,13 +165,9 @@ local function parse_messages(rows)
   for _, row in ipairs(rows) do
     local message = by_id[row.message_id]
     if not message then
-      local ok, message_data = pcall(vim.json.decode, row.message_data or '{}')
-      if not ok or type(message_data) ~= 'table' then
-        message_data = {}
-      end
       message = {
         id = row.message_id,
-        role = message_data.role,
+        role = row.message_role,
         time_created = row.message_time,
         parts = {},
       }
@@ -179,12 +175,9 @@ local function parse_messages(rows)
       table.insert(messages, message)
     end
 
-    if row.part_data then
-      local ok, part_data = pcall(vim.json.decode, row.part_data)
-      if ok and type(part_data) == 'table' and part_data.type == 'text' and type(part_data.text) == 'string' then
-        table.insert(message.parts, part_data.text)
-        text_parts = text_parts + 1
-      end
+    if type(row.part_text) == 'string' and row.part_text ~= '' then
+      table.insert(message.parts, row.part_text)
+      text_parts = text_parts + 1
     end
   end
 
@@ -199,14 +192,16 @@ end
 local function read_session_messages(db_path, session, callback, status_callback)
   local logger = log()
   local Job = require 'plenary.job'
+  local opts = config.values.opencode_context or {}
+  local max_part_chars = math.max(1000, math.floor((opts.max_message_chars or 5000) * 1.2))
   if status_callback then
     status_callback 'OpenCode: Loading session context'
   end
   logger.debug('Reading OpenCode session messages for session=' .. tostring(session.id))
   local sql = table.concat({
-    'select m.id as message_id, m.time_created as message_time, m.data as message_data,',
-    'p.id as part_id, p.time_created as part_time, p.data as part_data',
-    'from message m left join part p on p.message_id = m.id',
+    "select m.id as message_id, m.time_created as message_time, json_extract(m.data, '$.role') as message_role,",
+    "p.id as part_id, p.time_created as part_time, substr(json_extract(p.data, '$.text'), 1, " .. tostring(max_part_chars) .. ') as part_text',
+    "from message m left join part p on p.message_id = m.id and json_extract(p.data, '$.type') = 'text'",
     'where m.session_id = ' .. sql_quote(session.id),
     'order by m.time_created asc, p.time_created asc, p.id asc;',
   }, ' ')

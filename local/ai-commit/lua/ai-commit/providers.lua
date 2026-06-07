@@ -333,6 +333,99 @@ local function generation_sections(recent_commits, session_summary, diff_stat, d
   return sections
 end
 
+local function truncate_middle(text, max_chars, label)
+  if type(text) ~= 'string' or #text <= max_chars then
+    return text, false
+  end
+
+  max_chars = math.max(0, max_chars)
+  local marker = string.format('\n\n[... %s truncated by ai-commit: original=%d chars, kept=%d chars ...]\n\n', label or 'content', #text, max_chars)
+  if max_chars <= #marker then
+    return marker, true
+  end
+
+  local remaining = max_chars - #marker
+  local head_len = math.floor(remaining * 0.7)
+  local tail_len = remaining - head_len
+  local tail_start = math.max(1, #text - tail_len + 1)
+  return text:sub(1, head_len) .. marker .. text:sub(tail_start), true
+end
+
+local function selected_context_size(source_id)
+  local ok, ai_provider = pcall(require, 'ai-provider')
+  if not ok then
+    return nil
+  end
+
+  local selection = ai_provider.get_source_selection(source_id)
+  local provider = selection and selection.provider or ai_provider.get_default_provider()
+  if not provider then
+    return nil
+  end
+
+  local model = selection and selection.model or ai_provider.get_selected_model(provider, source_id)
+  local provider_config = ai_provider.get_provider_config(provider)
+  if type(provider_config) ~= 'table' then
+    return nil
+  end
+
+  local model_config = provider_config.models and provider_config.models[model]
+  if type(model_config) == 'table' and type(model_config.context_size) == 'number' then
+    return model_config.context_size
+  end
+  if type(provider_config.context_size) == 'number' then
+    return provider_config.context_size
+  end
+  return nil
+end
+
+local function prompt_budget_chars(source_id)
+  local context_size = selected_context_size(source_id)
+  if not context_size then
+    return nil, nil
+  end
+
+  local ratio = tonumber(config.values.prompt_context_ratio) or 0.8
+  ratio = math.max(0.1, math.min(ratio, 1))
+  return math.floor(context_size * ratio), context_size
+end
+
+local function commit_prompt_with_budget(branch, recent_commits, session_summary, diff_stat, diff)
+  local sections = generation_sections(recent_commits, session_summary, diff_stat, diff)
+  local prompt = prompts.commit(branch, sections)
+  local max_prompt_chars, context_size = prompt_budget_chars(config.message_source_id)
+  if not max_prompt_chars or max_prompt_chars <= 0 or #prompt <= max_prompt_chars or type(diff) ~= 'string' or diff == '' then
+    return prompt, sections, diff, false, context_size, max_prompt_chars
+  end
+
+  local excess = #prompt - max_prompt_chars
+  local diff_budget = math.max(0, #diff - excess - 512)
+  local truncated_diff, truncated = truncate_middle(diff, diff_budget, 'staged changes')
+  if not truncated then
+    return prompt, sections, diff, false, context_size, max_prompt_chars
+  end
+
+  sections = generation_sections(recent_commits, session_summary, diff_stat, truncated_diff)
+  prompt = prompts.commit(branch, sections)
+  while #prompt > max_prompt_chars and diff_budget > 0 do
+    diff_budget = math.floor(diff_budget * 0.75)
+    truncated_diff = truncate_middle(diff, diff_budget, 'staged changes')
+    sections = generation_sections(recent_commits, session_summary, diff_stat, truncated_diff)
+    prompt = prompts.commit(branch, sections)
+  end
+
+  log().warn(
+    string.format(
+      'Commit prompt exceeded max size, trimmed staged changes (max_prompt_chars=%d prompt_chars=%d original_diff_chars=%d sent_diff_chars=%d)',
+      max_prompt_chars,
+      #prompt,
+      #diff,
+      #truncated_diff
+    )
+  )
+  return prompt, sections, truncated_diff, true, context_size, max_prompt_chars
+end
+
 local function refinement_sections(context)
   local refinement = config.values.refinement or {}
   local include = refinement.include_context or {}
@@ -429,18 +522,21 @@ function M.generate_commit_message(
     diff_stat = diff_stat,
     diff = diff,
   }
-  local sections = generation_sections(recent_commits, session_summary, diff_stat, diff)
-  local prompt = prompts.commit(branch, sections)
+  local prompt, _, prompt_diff, prompt_truncated, context_size, max_prompt_chars = commit_prompt_with_budget(branch, recent_commits, session_summary, diff_stat, diff)
+  context.diff = prompt_diff
   log().debug(
     string.format(
-      'Commit prompt built (branch=%s commits_chars=%d session_context_chars=%d diff_stat_chars=%d diff_chars=%d prompt_chars=%d has_session_context=%s)',
+      'Commit prompt built (branch=%s commits_chars=%d session_context_chars=%d diff_stat_chars=%d diff_chars=%d prompt_chars=%d context_size=%s max_prompt_chars=%s has_session_context=%s prompt_truncated=%s)',
       branch,
       type(recent_commits) == 'string' and #recent_commits or 0,
       type(session_summary) == 'string' and #session_summary or 0,
       type(diff_stat) == 'string' and #diff_stat or 0,
-      type(diff) == 'string' and #diff or 0,
+      type(prompt_diff) == 'string' and #prompt_diff or 0,
       #prompt,
-      session_summary and 'yes' or 'no'
+      tostring(context_size),
+      tostring(max_prompt_chars),
+      session_summary and 'yes' or 'no',
+      tostring(prompt_truncated)
     )
   )
   dump_prompt(prompt, 'generate-message', branch)

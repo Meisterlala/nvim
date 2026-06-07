@@ -15,6 +15,7 @@ M.values = {
   preview_lines = 5,
   preview_max_chars = 4000,
   max_diff_chars = 100000,
+  prompt_context_ratio = 0.8,
   refinement = {
     enabled = true,
     max_iterations = 2,
