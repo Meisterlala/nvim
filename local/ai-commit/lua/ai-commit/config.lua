@@ -16,6 +16,10 @@ M.values = {
   spinner_interval = 80,
   preview_lines = 5,
   max_diff_chars = 100000,
+  diff_context = {
+    small_changed_lines = 100,
+    medium_changed_lines = 500,
+  },
   chat_timeout = 30000,
   model_highlight_group = 'Special',
   prompt_dump_path = vim.fn.stdpath 'log' .. '/ai-commit-last-prompt.md',

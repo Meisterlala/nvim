@@ -46,6 +46,11 @@ Recent commits:
 Recent assistant session context:
 %s
 
+Staged Files:
+```
+%s
+```
+
 Staged changes:
 ```
 %s

@@ -355,22 +355,24 @@ end
 ---@param branch string
 ---@param recent_commits string
 ---@param session_summary string|nil
+---@param diff_stat string
 ---@param diff string
 ---@param callback function(string|nil, table|nil)
 ---@param status_callback function(string)|nil
 ---@param request_context table|nil
-function M.generate_commit_message(branch, recent_commits, session_summary, diff, callback, status_callback, request_context)
+function M.generate_commit_message(branch, recent_commits, session_summary, diff_stat, diff, callback, status_callback, request_context)
   local session_context = session_summary
   if type(session_context) ~= 'string' or session_context:match '^%s*$' then
     session_context = 'No recent assistant session context available.'
   end
-  local prompt = string.format(prompts.commit, branch, recent_commits, session_context, diff)
+  local prompt = string.format(prompts.commit, branch, recent_commits, session_context, diff_stat, diff)
   log().debug(
     string.format(
-      'Commit prompt built (branch=%s commits_chars=%d session_context_chars=%d diff_chars=%d prompt_chars=%d has_session_context=%s)',
+      'Commit prompt built (branch=%s commits_chars=%d session_context_chars=%d diff_stat_chars=%d diff_chars=%d prompt_chars=%d has_session_context=%s)',
       branch,
       #recent_commits,
       #session_context,
+      #diff_stat,
       #diff,
       #prompt,
       session_summary and 'yes' or 'no'

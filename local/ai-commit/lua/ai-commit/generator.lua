@@ -102,9 +102,9 @@ function M.insert()
   local done = false
   local aborted = false
   local http_jobs = {}
-  local context_total = 4
+  local context_total = 5
   local context_done = 0
-  local pending = 4
+  local pending = 5
   local failed = false
   local last_status_line = nil
   local context = {}
@@ -191,7 +191,7 @@ function M.insert()
     status(string.format('Preparing context (%d/%d)', context_done, context_total))
     pending = pending - 1
     if pending == 0 and not failed then
-      providers.generate_commit_message(context.branch, context.recent_commits, context.session_summary, context.diff, function(message)
+      providers.generate_commit_message(context.branch, context.recent_commits, context.session_summary, context.diff_stat, context.diff, function(message)
         finalize(message)
       end, status, vim.tbl_extend('force', request_context, { status_action = 'Generating commit message' }))
     elseif failed then
@@ -228,7 +228,13 @@ function M.insert()
       mark_done()
       return
     end
-    logger.debug('Assistant session context loaded (provider=' .. tostring(session.label or session.provider) .. ' transcript_chars=' .. tostring(#(session.transcript or '')) .. ')')
+    logger.debug(
+      'Assistant session context loaded (provider='
+        .. tostring(session.label or session.provider)
+        .. ' transcript_chars='
+        .. tostring(#(session.transcript or ''))
+        .. ')'
+    )
     providers.summarize_session(session, function(summary)
       if done then
         return
@@ -252,12 +258,28 @@ function M.insert()
     context.diff_meta = diff_meta
     logger.debug(
       string.format(
-        'Staged diff context ready (chars=%d truncated=%s original_chars=%s)',
+        'Staged diff context ready (chars=%d changed_lines=%s context_lines=%s truncated=%s original_chars=%s)',
         #diff,
+        tostring(diff_meta and diff_meta.changed_lines),
+        tostring(diff_meta and diff_meta.context_lines),
         tostring(diff_meta and diff_meta.truncated),
         tostring(diff_meta and diff_meta.original_chars)
       )
     )
+    mark_done()
+  end)
+
+  git.staged_diff_stat(function(diff_stat)
+    if done then
+      return
+    end
+    if not diff_stat then
+      failed = true
+      finalize(nil)
+      return
+    end
+    context.diff_stat = diff_stat
+    logger.debug('Staged diff stat context ready (chars=' .. tostring(#diff_stat) .. ')')
     mark_done()
   end)
 end
