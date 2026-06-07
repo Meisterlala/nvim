@@ -18,6 +18,7 @@
 ---@field provider string Provider name.
 ---@field model string Model/profile name. This is a reference to the configured model name, not copied options.
 ---@field label? string Display label, usually `provider/model`.
+---@field name? string Human-readable source name when used for source registration.
 
 ---@class AiProviderModelConfig
 ---@field model string Underlying provider model name.
@@ -137,7 +138,13 @@ function M.list_sources()
 end
 
 ---@param source_id string Caller/source ID.
----@param opts? AiProviderSelection Optional initial provider/model selection.
+---@return string|nil name Human-readable source name, or source ID when no custom name exists.
+function M.get_source_name(source_id)
+  return core.get_source_name(source_id)
+end
+
+---@param source_id string Caller/source ID.
+---@param opts? AiProviderSelection Optional source metadata and initial provider/model selection.
 ---@return boolean saved Whether the source was registered.
 function M.register_source(source_id, opts)
   return core.register_source(source_id, opts)

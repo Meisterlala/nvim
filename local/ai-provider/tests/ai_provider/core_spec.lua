@@ -64,7 +64,7 @@ describe('ai-provider core', function()
     rawset(core, 'list_models', original_list_models)
     rawset(vim.ui, 'select', original_select)
 
-    assert.are.same({ provider = 'ollama', model = 'gemma4:e2b 64k', label = 'ollama/gemma4:e2b 64k' }, prefs.sources['ai-commit'])
+    assert.are.same({ provider = 'ollama', model = 'gemma4:e2b 64k' }, prefs.sources['ai-commit'])
   end)
 
   it('stores model preferences per source id', function()

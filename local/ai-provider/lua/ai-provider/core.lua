@@ -11,6 +11,7 @@ local state = {
     providers = {},
   },
   model_cache = {},
+  sources = {},
 }
 
 local function valid_source_id(source_id)
@@ -21,8 +22,68 @@ local function model_display(provider, model)
   return provider .. '/' .. model
 end
 
+local function table_is_empty(value)
+  if type(value) ~= 'table' then
+    return true
+  end
+  return next(value) == nil
+end
+
 local function is_configured_provider(provider)
   return type(state.config.providers[provider]) == 'table'
+end
+
+local function source_name(source_id)
+  local source = state.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    return source.name
+  end
+  local prefs = M.load_preferences()
+  source = prefs.sources and prefs.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    return source.name
+  end
+  return source_id
+end
+
+local function source_registered_name(source_id)
+  local source = state.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    return source.name
+  end
+  local prefs = M.load_preferences()
+  source = prefs.sources and prefs.sources[source_id]
+  if type(source) == 'table' and type(source.name) == 'string' and source.name ~= '' then
+    return source.name
+  end
+  return nil
+end
+
+local function source_display(source_id)
+  return source_name(source_id)
+end
+
+local function has_source_model_preference(source_id)
+  local prefs = M.load_preferences()
+  local source = prefs.sources and prefs.sources[source_id]
+  return type(source) == 'table'
+    and is_configured_provider(source.provider)
+    and type(source.model) == 'string'
+    and source.model ~= ''
+end
+
+local function source_selection_display(source_id)
+  local selection = M.get_source_selection(source_id)
+  if not selection then
+    return ''
+  end
+
+  if not has_source_model_preference(source_id) then
+    return ' (default)'
+  end
+
+  local suffix = ' (' .. selection.label
+  return suffix .. ')'
 end
 
 local function get_provider_config(provider)
@@ -179,7 +240,7 @@ function M.get_source_selection(source_id)
   local prefs = M.load_preferences()
   local source = prefs.sources and prefs.sources[source_id]
   if type(source) == 'table' and is_configured_provider(source.provider) and type(source.model) == 'string' and source.model ~= '' then
-    return { provider = source.provider, model = source.model, label = model_display(source.provider, source.model) }
+    return { provider = source.provider, model = source.model, label = model_display(source.provider, source.model), name = source_registered_name(source_id) }
   end
 
   local provider = M.get_default_provider()
@@ -198,7 +259,12 @@ function M.set_source_selection(source_id, provider, model)
 
   local prefs = M.load_preferences()
   prefs.sources = prefs.sources or {}
-  prefs.sources[source_id] = { provider = provider, model = model, label = model_display(provider, model) }
+  local source = type(prefs.sources[source_id]) == 'table' and prefs.sources[source_id] or {}
+  source.provider = provider
+  source.model = model
+  source.label = nil
+  source.name = nil
+  prefs.sources[source_id] = source
   return M.save_preferences(prefs)
 end
 
@@ -208,18 +274,39 @@ function M.register_source(source_id, opts)
   end
 
   opts = opts or {}
+  state.sources[source_id] = state.sources[source_id] or {}
+  state.sources[source_id].name = opts.name
+
   local prefs = M.load_preferences()
   prefs.sources = prefs.sources or {}
-  if type(prefs.sources[source_id]) == 'table' then
-    return true
+  local source = type(prefs.sources[source_id]) == 'table' and prefs.sources[source_id] or {}
+  source.label = nil
+  if type(opts.name) == 'string' and opts.name ~= '' then
+    source.name = opts.name
   end
 
-  local provider = opts.provider or M.get_default_provider()
-  local model = opts.model or (provider and M.get_selected_model(provider) or nil)
+  if type(source.provider) == 'string' or type(source.model) == 'string' then
+    prefs.sources[source_id] = source
+    return M.save_preferences(prefs)
+  end
+
+  local provider = opts.provider
+  local model = opts.model
   if provider and model and is_configured_provider(provider) then
-    prefs.sources[source_id] = { provider = provider, model = model, label = model_display(provider, model) }
+    prefs.sources[source_id] = { provider = provider, model = model }
+    if type(opts.name) == 'string' and opts.name ~= '' then
+      prefs.sources[source_id].name = opts.name
+    end
+    return M.save_preferences(prefs)
+  end
+
+  if table_is_empty(source) then
+    prefs.sources[source_id] = nil
   else
-    prefs.sources[source_id] = {}
+    prefs.sources[source_id] = source
+  end
+  if table_is_empty(prefs.sources) then
+    prefs.sources = nil
   end
   return M.save_preferences(prefs)
 end
@@ -227,13 +314,27 @@ end
 function M.list_sources()
   local prefs = M.load_preferences()
   local sources = {}
+  local seen = {}
   for source_id in pairs(prefs.sources or {}) do
     if type(source_id) == 'string' then
+      seen[source_id] = true
+      table.insert(sources, source_id)
+    end
+  end
+  for source_id in pairs(state.sources) do
+    if type(source_id) == 'string' and not seen[source_id] then
       table.insert(sources, source_id)
     end
   end
   table.sort(sources)
   return sources
+end
+
+function M.get_source_name(source_id)
+  if not valid_source_id(source_id) then
+    return nil
+  end
+  return source_name(source_id)
 end
 
 function M.check(provider, callback, opts)
@@ -475,14 +576,14 @@ end
 function M.select_source_model(source_id)
   if valid_source_id(source_id) then
     select_helper({
-      prompt = 'Select AI model for ' .. source_id .. ':',
+      prompt = 'Select AI model for ' .. source_name(source_id) .. ':',
       source_id = source_id,
     }, function(choice)
       if not choice then
         return
       end
       M.set_source_selection(source_id, choice.provider, choice.model)
-      vim.notify('AI model for ' .. source_id .. ' set to ' .. choice.label, vim.log.levels.INFO)
+      vim.notify('AI model for ' .. source_name(source_id) .. ' set to ' .. choice.label, vim.log.levels.INFO)
     end)
     return
   end
@@ -494,11 +595,9 @@ function M.select_source_model(source_id)
   end
 
   vim.ui.select(sources, {
-    prompt = 'Select AI provider source:',
+    prompt = 'Select model for Consumer:',
     format_item = function(item)
-      local selection = M.get_source_selection(item)
-      local suffix = selection and (' (' .. selection.label .. ')') or ''
-      return item .. suffix
+      return source_display(item) .. source_selection_display(item)
     end,
   }, function(choice)
     if choice then
@@ -638,9 +737,7 @@ function M.run_command(args)
 
   if args[1] == 'sources' then
     local lines = vim.tbl_map(function(source_id)
-      local selection = M.get_source_selection(source_id)
-      local suffix = selection and (' ' .. selection.label) or ''
-      return source_id .. suffix
+      return source_display(source_id) .. source_selection_display(source_id)
     end, M.list_sources())
     print_lines(lines)
     return

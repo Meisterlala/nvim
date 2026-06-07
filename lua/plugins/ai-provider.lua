@@ -41,23 +41,18 @@ return {
   },
   keys = {
     {
-      '<leader>pm',
-      function()
-        require('ai-provider').select_source_model()
-      end,
-      desc = 'AI [P]rovider Source [M]odel',
-    },
-    {
-      '<leader>pM',
+      '<leader>pd',
       function()
         require('ai-provider').select_model()
       end,
-      desc = 'AI [P]rovider Default [M]odel',
+      desc = 'AI [P]rovider [D]efault Model',
     },
     {
-      '<leader>pd',
-      '<cmd>AIProvider default<cr>',
-      desc = 'AI [P]rovider [D]efault',
+      '<leader>ps',
+      function()
+        require('ai-provider').select_source_model()
+      end,
+      desc = 'AI [P]rovider Set [S]pecific Consumer Model',
     },
     {
       '<leader>pc',
