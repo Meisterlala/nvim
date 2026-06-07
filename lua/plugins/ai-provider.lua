@@ -25,12 +25,20 @@ return {
             model = 'gemma4:e2b',
             context_size = 1024 * 64,
           },
+          ['qwen3.5:4b 64k'] = {
+            model = 'qwen3.5:4b',
+            context_size = 1024 * 64,
+          },
           ['qwen3.5:4b 128k'] = {
+            model = 'qwen3.5:4b',
+            context_size = 1024 * 128,
+          },
+          ['qwen3.5:4b 128k fast'] = {
             model = 'qwen3.5:4b',
             context_size = 1024 * 128,
             think = false,
           },
-          ['qwen3.5:4b 256k'] = {
+          ['qwen3.5:4b 256k fast'] = {
             model = 'qwen3.5:4b',
             context_size = 1024 * 256,
             think = false,
