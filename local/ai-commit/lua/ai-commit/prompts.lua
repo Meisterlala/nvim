@@ -102,16 +102,18 @@ end
 
 M.session_summary = [[Summarize the following %s session for a git commit message generator.
 
+The transcript is intentionally selective: it starts with the initial user request, then the tail of the session with recent user messages, assistant responses, and the final assistant response. Each message is labeled and fenced. Use this to recover what the user wanted, what changed during problem solving, and what final outcome matters for the commit message.
+
+Transcript policy: thinking/reasoning parts are excluded, ignored context tags are replaced with markers such as [removed system-reminder], and the recent window contains the configured last user messages plus assistant responses between them.
+
 Focus on user intent, important design decisions, problems encountered, and why the final change was made. Ignore tool output details unless they explain the intent or a fix. Keep it around 200 words. Do not invent facts.
 
 Session title: %s
 Workspace: %s
 
 Selected transcript:
-```
 %s
-```
 
-Summary:]]
+Summary of this Session:]]
 
 return M

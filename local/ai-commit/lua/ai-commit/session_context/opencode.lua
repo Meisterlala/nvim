@@ -19,7 +19,35 @@ local function message_text(message)
       table.insert(parts, part)
     end
   end
-  return util.strip_relevant_memories(table.concat(parts, '\n'))
+  return util.strip_ignored_context_blocks(util.strip_relevant_memories(table.concat(parts, '\n')))
+end
+
+---@param selected table[]
+---@param seen table
+---@param message table|nil
+local function add_selected(selected, seen, message)
+  if not message or seen[message.id] then
+    return
+  end
+  seen[message.id] = true
+  table.insert(selected, { message = message })
+end
+
+---@param item table
+---@param max_message_chars integer
+---@param label string
+---@return string|nil
+local function format_message(item, max_message_chars, label)
+  local text = vim.trim(util.truncate_text(message_text(item.message), max_message_chars))
+  if text == '' then
+    return nil
+  end
+  text = vim.trim(text:gsub('```', ''))
+  if text == '' then
+    return nil
+  end
+
+  return string.format('%s:\n```\n%s\n```', label, text)
 end
 
 ---@param messages table[]
@@ -29,34 +57,58 @@ local function build_transcript(messages)
   local opts = config.values.opencode_context or {}
   local max_message_chars = opts.max_message_chars or 5000
   local max_transcript_chars = opts.max_transcript_chars or 30000
-  local assistant_limit = opts.assistant_messages or 4
+  local user_limit = opts.recent_user_messages or 4
 
   local first_user = nil
-  local last_user = nil
-  local assistants = {}
+  local final_assistant = nil
+  local usable_messages = {}
+  local user_indexes = {}
 
-  for _, message in ipairs(messages) do
+  for index, message in ipairs(messages) do
     local text = message_text(message)
     if text ~= '' then
+      table.insert(usable_messages, message)
       if message.role == 'user' then
         first_user = first_user or message
-        last_user = message
+        table.insert(user_indexes, index)
       elseif message.role == 'assistant' then
-        table.insert(assistants, message)
+        final_assistant = message
       end
     end
   end
 
   local selected = {}
+  local seen = {}
   if first_user then
-    table.insert(selected, { label = 'Initial user message', message = first_user })
-  end
-  if last_user and last_user ~= first_user then
-    table.insert(selected, { label = 'Latest user message', message = last_user })
+    add_selected(selected, seen, first_user)
   end
 
-  for index = math.max(1, #assistants - assistant_limit + 1), #assistants do
-    table.insert(selected, { label = 'Recent assistant response', message = assistants[index] })
+  local tail = {}
+
+  local conversation_start = nil
+  local wanted_user_count = 0
+  for user_index = #user_indexes, 1, -1 do
+    if not first_user or messages[user_indexes[user_index]] ~= first_user then
+      conversation_start = user_indexes[user_index]
+      wanted_user_count = wanted_user_count + 1
+      if wanted_user_count >= user_limit then
+        break
+      end
+    end
+  end
+
+  if conversation_start then
+    for index, message in ipairs(messages) do
+      if index >= conversation_start then
+        if message ~= final_assistant and (message.role == 'user' or message.role == 'assistant') then
+          add_selected(tail, seen, message)
+        end
+      end
+    end
+  end
+
+  if final_assistant then
+    add_selected(tail, seen, final_assistant)
   end
 
   if #selected == 0 then
@@ -66,17 +118,35 @@ local function build_transcript(messages)
 
   local lines = {}
   for _, item in ipairs(selected) do
-    local text = util.truncate_text(message_text(item.message), max_message_chars)
-    table.insert(lines, string.format('%s (%s):\n%s', item.label, item.message.role or 'unknown', text))
+    local formatted = format_message(item, max_message_chars, 'initial user message')
+    if formatted then
+      table.insert(lines, formatted)
+    end
   end
 
-  local transcript = util.truncate_text(table.concat(lines, '\n\n---\n\n'), max_transcript_chars)
+  if #tail > 0 then
+    table.insert(lines, 'Tail of the Session:')
+    for _, item in ipairs(tail) do
+      local label = item.message == final_assistant and 'final assistant response' or item.message.role == 'user' and 'user message' or 'assistant response'
+      local formatted = format_message(item, max_message_chars, label)
+      if formatted then
+        table.insert(lines, formatted)
+      end
+    end
+  end
+
+  if #lines == 0 then
+    logger.debug('OpenCode transcript selection was empty after formatting (messages=' .. tostring(#messages) .. ')')
+    return nil
+  end
+
+  local transcript = util.truncate_text(table.concat(lines, '\n\n'), max_transcript_chars)
   logger.debug(
     string.format(
-      'OpenCode transcript built (messages=%d users=%s assistants=%d selected=%d chars=%d)',
+      'OpenCode transcript built (messages=%d usable=%d users=%d selected=%d chars=%d)',
       #messages,
-      first_user and 'yes' or 'no',
-      #assistants,
+      #usable_messages,
+      #user_indexes,
       #selected,
       #transcript
     )

@@ -33,7 +33,7 @@ M.values = {
   opencode_context = {
     db_path = vim.fn.expand '~/.local/share/opencode/opencode.db',
     recent_ms = 60 * 60 * 1000,
-    assistant_messages = 8,
+    recent_user_messages = 4,
     max_message_chars = 5000,
     max_transcript_chars = 30000,
   },
