@@ -6,6 +6,10 @@ return { -- Useful plugin to show you pending keybinds.
     -- delay between pressing a key and opening which-key (milliseconds)
     -- this setting is independent of vim.opt.timeoutlen
     delay = 300,
+    -- disable which-key popup during macro recording so leader keys pass through
+    filter = function()
+      return vim.fn.reg_recording() == '' and vim.fn.reg_executing() == ''
+    end,
 
     preset = 'modern',
     expand = function(node)
