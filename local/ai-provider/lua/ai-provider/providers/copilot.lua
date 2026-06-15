@@ -223,71 +223,85 @@ function M.chat(request)
     headers['Authorization'] = 'Bearer ' .. token
     headers['Content-Type'] = 'application/json'
 
-    local body = {
-      messages = { { role = 'user', content = request.prompt } },
-      stream = false,
-      max_tokens = request.max_tokens,
-    }
-    if request.model and request.model ~= AUTO_MODEL then
-      body.model = request.model
+    local requested_model = request.model or AUTO_MODEL
+    local active_job = nil
+
+    local function send_chat(model, retried_auto)
+      local body = {
+        messages = { { role = 'user', content = request.prompt } },
+        stream = false,
+        max_tokens = request.max_tokens,
+      }
+      if model and model ~= AUTO_MODEL then
+        body.model = model
+      end
+
+      emit_status('generating', 'Generating response')
+      active_job = curl.json {
+        method = 'POST',
+        url = endpoint .. '/chat/completions',
+        headers = headers,
+        body = body,
+        timeout = request.timeout or 30000,
+        callback = function(response)
+          if is_cancelled(request) then
+            return
+          end
+
+          local elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6
+          if response.status ~= 200 then
+            local error_code = response.json and response.json.error and response.json.error.code
+            if response.status == 400 and error_code == 'unsupported_api_for_model' and body.model and not retried_auto then
+              log.warn('copilot model unsupported by chat completions, retrying with auto: ' .. tostring(body.model))
+              send_chat(AUTO_MODEL, true)
+              return
+            end
+
+            local error_message = 'copilot api request failed: ' .. tostring(response.status)
+            log.error(string.format('%s elapsed_ms=%.0f body=%s', error_message, elapsed_ms, format_body_for_log(response.body)))
+            if request.callback then
+              request.callback(nil, {
+                requested_model = requested_model,
+                used_model = model or AUTO_MODEL,
+                elapsed_ms = elapsed_ms,
+                error = error_message,
+              })
+            end
+            return
+          end
+
+          local data = response.json
+          local message = data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content
+          if type(message) ~= 'string' or message == '' then
+            log.error('copilot response missing message body=' .. format_body_for_log(response.body))
+            if request.callback then
+              request.callback(nil, {
+                requested_model = requested_model,
+                used_model = model or AUTO_MODEL,
+                elapsed_ms = elapsed_ms,
+                error = 'copilot returned no content',
+              })
+            end
+            return
+          end
+
+          local used_model = data.model or body.model or AUTO_MODEL
+          log.info(string.format('copilot response requested_model=%s used_model=%s elapsed_ms=%.0f', requested_model, used_model, elapsed_ms))
+          emit_status('done', 'Response complete')
+          if request.callback then
+            request.callback(message, {
+              requested_model = requested_model,
+              used_model = used_model,
+              elapsed_ms = elapsed_ms,
+            })
+          end
+        end,
+      }
+      register_job(request, active_job)
     end
 
-    local requested_model = request.model or AUTO_MODEL
-    emit_status('generating', 'Generating response')
-    local job = curl.json {
-      method = 'POST',
-      url = endpoint .. '/chat/completions',
-      headers = headers,
-      body = body,
-      timeout = request.timeout or 30000,
-      callback = function(response)
-        if is_cancelled(request) then
-          return
-        end
-
-        local elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6
-        if response.status ~= 200 then
-          local error_message = 'copilot api request failed: ' .. tostring(response.status)
-          log.error(string.format('%s elapsed_ms=%.0f body=%s', error_message, elapsed_ms, format_body_for_log(response.body)))
-          if request.callback then
-            request.callback(nil, {
-              requested_model = requested_model,
-              used_model = requested_model,
-              elapsed_ms = elapsed_ms,
-              error = error_message,
-            })
-          end
-          return
-        end
-
-        local data = response.json
-        local message = data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content
-        if type(message) ~= 'string' or message == '' then
-          log.error('copilot response missing message body=' .. format_body_for_log(response.body))
-          if request.callback then
-            request.callback(nil, {
-              requested_model = requested_model,
-              used_model = requested_model,
-              elapsed_ms = elapsed_ms,
-              error = 'copilot returned no content',
-            })
-          end
-          return
-        end
-
-        local used_model = data.model or body.model or AUTO_MODEL
-        log.info(string.format('copilot response requested_model=%s used_model=%s elapsed_ms=%.0f', requested_model, used_model, elapsed_ms))
-        emit_status('done', 'Response complete')
-        if request.callback then
-          request.callback(message, {
-            requested_model = requested_model,
-            used_model = used_model,
-            elapsed_ms = elapsed_ms,
-          })
-        end
-      end,
-    }
-    register_job(request, job)
+    send_chat(request.model or AUTO_MODEL, false)
+    return active_job
   end)
 end
 

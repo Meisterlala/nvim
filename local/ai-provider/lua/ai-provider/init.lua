@@ -133,6 +133,12 @@ function M.set_source_selection(source_id, provider, model)
   return core.set_source_selection(source_id, provider, model)
 end
 
+---@param source_id string Caller/source ID.
+---@return boolean saved Whether the source preference was cleared.
+function M.clear_source_selection(source_id)
+  return core.clear_source_selection(source_id)
+end
+
 ---@return string[] sources Known source IDs.
 function M.list_sources()
   return core.list_sources()

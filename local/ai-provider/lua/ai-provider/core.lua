@@ -6,6 +6,10 @@ local providers = {
   ollama = require 'ai-provider.providers.ollama',
 }
 
+local provider_aliases = {
+  github = 'copilot',
+}
+
 local state = {
   config = {
     providers = {},
@@ -13,6 +17,8 @@ local state = {
   model_cache = {},
   sources = {},
 }
+
+local DEFAULT_MODEL = 'default'
 
 local function valid_source_id(source_id)
   return type(source_id) == 'string' and source_id ~= ''
@@ -29,8 +35,15 @@ local function table_is_empty(value)
   return next(value) == nil
 end
 
+local function canonical_provider(provider)
+  if type(provider) ~= 'string' then
+    return provider
+  end
+  return provider_aliases[provider] or provider
+end
+
 local function is_configured_provider(provider)
-  return type(state.config.providers[provider]) == 'table'
+  return type(state.config.providers[canonical_provider(provider)]) == 'table' or type(state.config.providers[provider]) == 'table'
 end
 
 local function source_name(source_id)
@@ -84,7 +97,11 @@ end
 local function has_source_model_preference(source_id)
   local prefs = M.load_preferences()
   local source = prefs.sources and prefs.sources[source_id]
-  return type(source) == 'table' and is_configured_provider(source.provider) and type(source.model) == 'string' and source.model ~= ''
+  return type(source) == 'table'
+    and is_configured_provider(source.provider)
+    and type(source.model) == 'string'
+    and source.model ~= ''
+    and source.model ~= DEFAULT_MODEL
 end
 
 local function source_selection_display(source_id)
@@ -102,7 +119,7 @@ local function source_selection_display(source_id)
 end
 
 local function get_provider_config(provider)
-  return state.config.providers[provider] or {}
+  return state.config.providers[canonical_provider(provider)] or state.config.providers[provider] or {}
 end
 
 local function validate_config(opts)
@@ -118,12 +135,12 @@ local function validate_config(opts)
     error('ai-provider setup requires providers table', 3)
   end
 
-  if not opts.providers[opts.default_provider] then
+  if not opts.providers[opts.default_provider] and not opts.providers[canonical_provider(opts.default_provider)] then
     error('ai-provider default_provider must be configured under providers: ' .. opts.default_provider, 3)
   end
 
   for provider, provider_config in pairs(opts.providers) do
-    if not providers[provider] then
+    if not providers[canonical_provider(provider)] then
       error('ai-provider config references unknown provider: ' .. provider, 3)
     end
     if type(provider_config.default_model) ~= 'string' or provider_config.default_model == '' then
@@ -170,7 +187,7 @@ function M.get_provider(name)
   if not is_configured_provider(name) then
     return nil
   end
-  return providers[name]
+  return providers[canonical_provider(name)]
 end
 
 function M.get_provider_config(name)
@@ -189,13 +206,28 @@ function M.list_providers()
   return names
 end
 
+local function list_provider_commands()
+  local names = M.list_providers()
+  local seen = {}
+  for _, name in ipairs(names) do
+    seen[name] = true
+  end
+  for alias in pairs(provider_aliases) do
+    if is_configured_provider(alias) and not seen[alias] then
+      table.insert(names, alias)
+    end
+  end
+  table.sort(names)
+  return names
+end
+
 function M.get_default_provider()
   local prefs = M.load_preferences()
   if type(prefs.default_provider) == 'string' and is_configured_provider(prefs.default_provider) then
-    return prefs.default_provider
+    return canonical_provider(prefs.default_provider)
   end
   if type(state.config.default_provider) == 'string' and is_configured_provider(state.config.default_provider) then
-    return state.config.default_provider
+    return canonical_provider(state.config.default_provider)
   end
   return nil
 end
@@ -206,25 +238,31 @@ function M.set_default_provider(provider)
   end
 
   local prefs = M.load_preferences()
-  prefs.default_provider = provider
+  prefs.default_provider = canonical_provider(provider)
   return M.save_preferences(prefs)
 end
 
 function M.get_selected_model(provider, source_id)
+  local requested_provider = provider
+  provider = canonical_provider(provider)
   local prefs = M.load_preferences()
   if valid_source_id(source_id) then
     local source = prefs.sources and prefs.sources[source_id]
-    if type(source) == 'table' and source.provider == provider and type(source.model) == 'string' and source.model ~= '' then
-      return source.model
+    if type(source) == 'table' and canonical_provider(source.provider) == provider and type(source.model) == 'string' and source.model ~= '' then
+      if source.model ~= DEFAULT_MODEL then
+        return source.model
+      end
     end
   end
 
-  local provider_prefs = prefs[provider]
+  local provider_prefs = prefs[provider] or prefs[requested_provider]
   if type(provider_prefs) == 'table' and type(provider_prefs.model) == 'string' and provider_prefs.model ~= '' then
-    return provider_prefs.model
+    if provider_prefs.model ~= DEFAULT_MODEL then
+      return provider_prefs.model
+    end
   end
 
-  local provider_config = state.config.providers[provider]
+  local provider_config = get_provider_config(provider)
   if type(provider_config) == 'table' and type(provider_config.default_model) == 'string' and provider_config.default_model ~= '' then
     return provider_config.default_model
   end
@@ -237,6 +275,7 @@ function M.set_selected_model(provider, model)
     return false
   end
 
+  provider = canonical_provider(provider)
   local prefs = M.load_preferences()
   prefs[provider] = prefs[provider] or {}
   prefs[provider].model = model
@@ -251,7 +290,11 @@ function M.get_source_selection(source_id)
   local prefs = M.load_preferences()
   local source = prefs.sources and prefs.sources[source_id]
   if type(source) == 'table' and is_configured_provider(source.provider) and type(source.model) == 'string' and source.model ~= '' then
-    return { provider = source.provider, model = source.model, label = model_display(source.provider, source.model), name = source_registered_name(source_id) }
+    local provider = canonical_provider(source.provider)
+    local model = source.model == DEFAULT_MODEL and M.get_selected_model(provider) or source.model
+    if model then
+      return { provider = provider, model = model, label = model_display(provider, model), name = source_registered_name(source_id) }
+    end
   end
 
   local provider = M.get_default_provider()
@@ -268,6 +311,7 @@ function M.set_source_selection(source_id, provider, model)
     return false
   end
 
+  provider = canonical_provider(provider)
   local prefs = M.load_preferences()
   prefs.sources = prefs.sources or {}
   local source = type(prefs.sources[source_id]) == 'table' and prefs.sources[source_id] or {}
@@ -277,6 +321,33 @@ function M.set_source_selection(source_id, provider, model)
   source.label = nil
   source.name = source.name or metadata.name
   prefs.sources[source_id] = source
+  return M.save_preferences(prefs)
+end
+
+function M.clear_source_selection(source_id)
+  if not valid_source_id(source_id) then
+    return false
+  end
+
+  local prefs = M.load_preferences()
+  prefs.sources = prefs.sources or {}
+  local source = type(prefs.sources[source_id]) == 'table' and prefs.sources[source_id] or {}
+  local metadata = registered_source_metadata(source_id)
+  source.provider = nil
+  source.model = nil
+  source.label = nil
+  source.name = source.name or metadata.name
+
+  if source.name then
+    prefs.sources[source_id] = source
+  else
+    prefs.sources[source_id] = nil
+  end
+
+  if table_is_empty(prefs.sources) then
+    prefs.sources = nil
+  end
+
   return M.save_preferences(prefs)
 end
 
@@ -307,7 +378,7 @@ function M.register_source(source_id, opts)
   local provider = opts.provider
   local model = opts.model
   if provider and model and is_configured_provider(provider) then
-    prefs.sources[source_id] = { provider = provider, model = model, name = source.name }
+    prefs.sources[source_id] = { provider = canonical_provider(provider), model = model, name = source.name }
     if type(opts.name) == 'string' and opts.name ~= '' then
       prefs.sources[source_id].name = opts.name
     end
@@ -419,6 +490,7 @@ function M.chat(first, second)
     return nil
   end
 
+  local explicit_model = request.model
   request.model = request.model or M.get_selected_model(provider, request.source_id)
   request.provider_config = get_provider_config(provider)
   if not request.model then
@@ -431,8 +503,8 @@ function M.chat(first, second)
     return nil
   end
 
-  if valid_source_id(request.source_id) then
-    M.set_source_selection(request.source_id, provider, request.model)
+  if valid_source_id(request.source_id) and type(explicit_model) == 'string' and explicit_model ~= '' then
+    M.set_source_selection(request.source_id, provider, explicit_model)
   end
 
   log.info(
@@ -562,11 +634,18 @@ local function select_helper(opts, callback)
       return
     end
 
+    local choices = models
+    if opts.include_default then
+      choices = vim.deepcopy(models)
+      table.insert(choices, 1, { default = true, label = 'Default', model = DEFAULT_MODEL })
+    end
+
     local current = opts.current or (valid_source_id(opts.source_id) and M.get_source_selection(opts.source_id) or nil)
-    vim.ui.select(models, {
+    vim.ui.select(choices, {
       prompt = opts.prompt or 'Select AI provider model:',
       format_item = function(item)
-        local selected = current and item.provider == current.provider and item.model == current.model
+        local selected = item.default and valid_source_id(opts.source_id) and not has_source_model_preference(opts.source_id)
+        selected = selected or (current and item.provider == current.provider and item.model == current.model)
         local marker = selected and '✓ ' or '  '
         return marker .. item.label
       end,
@@ -574,6 +653,13 @@ local function select_helper(opts, callback)
       if not choice then
         if callback then
           callback(nil)
+        end
+        return
+      end
+
+      if choice.default then
+        if callback then
+          callback { default = true, model = DEFAULT_MODEL, label = choice.label }
         end
         return
       end
@@ -590,8 +676,19 @@ function M.select_source_model(source_id)
     select_helper({
       prompt = 'Select AI model for ' .. source_name(source_id) .. ':',
       source_id = source_id,
+      include_default = true,
     }, function(choice)
       if not choice then
+        return
+      end
+      if choice.default then
+        local provider = M.get_default_provider()
+        if provider then
+          M.set_source_selection(source_id, provider, DEFAULT_MODEL)
+        else
+          M.clear_source_selection(source_id)
+        end
+        vim.notify('AI model for ' .. source_name(source_id) .. ' reset to Default', vim.log.levels.INFO)
         return
       end
       M.set_source_selection(source_id, choice.provider, choice.model)
@@ -644,7 +741,7 @@ function M.command_complete(arglead, cmdline)
   local argc = math.max(#parts - 1, 0)
   if argc <= 1 then
     local first = vim.deepcopy(global_actions)
-    vim.list_extend(first, M.list_providers())
+    vim.list_extend(first, list_provider_commands())
     return filter(first, arglead)
   end
 
@@ -683,7 +780,7 @@ function M.command_complete(arglead, cmdline)
       return filter({ 'model' }, arglead)
     end
     if parts[4] == 'model' then
-      local cached = {}
+      local cached = { 'default' }
       for _, provider in ipairs(M.list_providers()) do
         for _, model in ipairs(state.model_cache[provider] or {}) do
           table.insert(cached, model_display(provider, model))
@@ -695,7 +792,7 @@ function M.command_complete(arglead, cmdline)
     return {}
   end
 
-  if not providers[first_arg] then
+  if not is_configured_provider(first_arg) then
     return {}
   end
 
@@ -769,9 +866,20 @@ function M.run_command(args)
     end
 
     if args[4] then
+      if args[4] == 'default' then
+        local provider = M.get_default_provider()
+        if provider then
+          M.set_source_selection(source_id, provider, DEFAULT_MODEL)
+        else
+          M.clear_source_selection(source_id)
+        end
+        vim.notify('AI model for ' .. source_id .. ' reset to Default', vim.log.levels.INFO)
+        return
+      end
+
       local provider, model = args[4]:match '^([^/]+)/(.+)$'
       if not provider or not model or not is_configured_provider(provider) then
-        vim.notify('Expected source model as provider/model, for example ollama/gemma4:e2b', vim.log.levels.ERROR)
+        vim.notify('Expected source model as provider/model or default, for example ollama/gemma4:e2b', vim.log.levels.ERROR)
         return
       end
       M.set_source_selection(source_id, provider, model)
