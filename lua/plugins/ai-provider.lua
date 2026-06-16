@@ -12,7 +12,7 @@ return {
         default_model = 'auto',
       },
       ollama = {
-        default_model = 'gemma4:e4b',
+        default_model = 'gemma4:e2b',
         context_size = 1024 * 8,
         timeout = 180000,
         keep_alive = '1h',

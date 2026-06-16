@@ -138,6 +138,39 @@ function M.stream_json_lines(request)
   local stderr = {}
   local stdout_lines = {}
   local http_status = nil
+  local stdout_buffer = ''
+
+  local function process_stdout_line(line)
+    line = line:gsub('^%s+', ''):gsub('%s+$', '')
+    if line == '' then
+      return
+    end
+
+    local status = line:match('^' .. status_marker .. '(%d+)$')
+    if status then
+      http_status = tonumber(status)
+      return
+    end
+
+    local payload = line
+    local event_data = line:match '^data:%s*(.*)$'
+    if event_data then
+      if event_data == '[DONE]' then
+        return
+      end
+      payload = event_data
+    end
+
+    if #stdout_lines < 20 then
+      table.insert(stdout_lines, payload)
+    end
+
+    local ok, data = pcall(vim.json.decode, payload)
+    if ok and type(data) == 'table' and request.on_json_line then
+      schedule(request.on_json_line, data, line)
+    end
+  end
+
   local job = Job:new {
     command = 'curl',
     args = args,
@@ -146,33 +179,21 @@ function M.stream_json_lines(request)
         return
       end
 
-      for line in tostring(output):gmatch('[^\r\n]+') do
-        line = line:gsub('^%s+', ''):gsub('%s+$', '')
-        if line ~= '' then
-          local status = line:match('^' .. status_marker .. '(%d+)$')
-          if status then
-            http_status = tonumber(status)
-          else
-            local payload = line
-            local event_data = line:match '^data:%s*(.*)$'
-            if event_data then
-              if event_data == '[DONE]' then
-                goto continue
-              end
-              payload = event_data
-            end
+      local text = tostring(output)
+      if stdout_buffer == '' and not text:find('[\r\n]') then
+        process_stdout_line(text)
+        return
+      end
 
-            if #stdout_lines < 20 then
-              table.insert(stdout_lines, payload)
-            end
-
-            local ok, data = pcall(vim.json.decode, payload)
-            if ok and type(data) == 'table' and request.on_json_line then
-              schedule(request.on_json_line, data, line)
-            end
-          end
+      stdout_buffer = stdout_buffer .. text
+      while true do
+        local newline_at = stdout_buffer:find('[\r\n]')
+        if not newline_at then
+          break
         end
-        ::continue::
+
+        process_stdout_line(stdout_buffer:sub(1, newline_at - 1))
+        stdout_buffer = stdout_buffer:sub(newline_at + 1)
       end
     end,
     on_stderr = function(_, line)
@@ -181,6 +202,11 @@ function M.stream_json_lines(request)
       end
     end,
     on_exit = function(_, code)
+      if stdout_buffer ~= '' and not (request.is_cancelled and request.is_cancelled()) then
+        process_stdout_line(stdout_buffer)
+        stdout_buffer = ''
+      end
+
       local error_parts = {}
       if #stderr > 0 then
         table.insert(error_parts, table.concat(stderr, '\n'))

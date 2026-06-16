@@ -6,7 +6,6 @@ local DEFAULT_ENDPOINT = 'http://127.0.0.1:11434'
 local HEALTH_CACHE_TTL = 60
 local MODEL_CACHE_TTL = 60
 local STATUS_THROTTLE_MS = 100
-local MAX_PENDING_CHUNK_CHARS = 4000
 
 local state = {
   health = nil,
@@ -190,7 +189,6 @@ function M.chat(request)
   local pending_statuses = {}
   local pending_status_flush_scheduled = false
   local pending_chunks = {}
-  local pending_chunk_chars = 0
   local pending_chunk_flush_scheduled = false
 
   local function flush_pending_statuses()
@@ -211,13 +209,11 @@ function M.chat(request)
     pending_chunk_flush_scheduled = false
     if not request.on_chunk or is_cancelled(request) then
       pending_chunks = {}
-      pending_chunk_chars = 0
       return
     end
 
     local chunks_to_flush = pending_chunks
     pending_chunks = {}
-    pending_chunk_chars = 0
     for _, item in ipairs(chunks_to_flush) do
       request.on_chunk(item.chunk, item.data, item.kind)
     end
@@ -244,13 +240,12 @@ function M.chat(request)
       return
     end
 
-    local item = { chunk = chunk, data = data, kind = kind }
-    table.insert(pending_chunks, item)
-    pending_chunk_chars = pending_chunk_chars + #chunk
-
-    while pending_chunk_chars > MAX_PENDING_CHUNK_CHARS and #pending_chunks > 1 do
-      local removed = table.remove(pending_chunks, 1)
-      pending_chunk_chars = pending_chunk_chars - #(removed.chunk or '')
+    local previous = pending_chunks[#pending_chunks]
+    if previous and previous.kind == kind then
+      previous.chunk = previous.chunk .. chunk
+      previous.data = data
+    else
+      table.insert(pending_chunks, { chunk = chunk, data = data, kind = kind })
     end
     schedule_chunk_flush()
   end
