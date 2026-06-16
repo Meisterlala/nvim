@@ -318,11 +318,11 @@ describe('ollama provider options', function()
     }
 
     vim.wait(1000, function()
-      return #statuses >= 3
+      return #statuses >= 4
     end, 10)
 
     assert.are.same('loading', statuses[1])
-    assert.are.same('generating', statuses[2])
-    assert.is_false(vim.tbl_contains(statuses, 'context'))
+    assert.are.same('context', statuses[2])
+    assert.are.same('generating', statuses[3])
   end)
 end)

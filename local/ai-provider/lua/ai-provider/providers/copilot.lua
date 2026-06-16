@@ -97,16 +97,20 @@ local function register_job(request, job)
   end
 end
 
+local function elapsed_ms_since(started_at)
+  return (vim.uv.hrtime() - started_at) / 1e6
+end
+
 local function get_api_token(request, callback)
   if state.api_token and state.api_token.expires_at and state.api_token.expires_at > os.time() then
     callback(state.api_token.token)
-    return
+    return nil
   end
 
   local oauth_token = get_oauth_token()
   if not oauth_token then
     callback(nil)
-    return
+    return nil
   end
 
   local job = curl.json {
@@ -138,6 +142,7 @@ local function get_api_token(request, callback)
     end,
   }
   register_job(request, job)
+  return job
 end
 
 function M.check(callback, opts)
@@ -187,6 +192,15 @@ end
 
 function M.chat(request)
   local started_at = vim.uv.hrtime()
+  local active_job = nil
+  local proxy_job = {
+    shutdown = function()
+      if active_job and active_job.shutdown then
+        active_job:shutdown()
+      end
+    end,
+  }
+  register_job(request, proxy_job)
 
   local function emit_status(phase, message)
     if request.on_status then
@@ -195,13 +209,13 @@ function M.chat(request)
         phase = phase,
         message = message,
         model = request.model,
-        elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6,
+        elapsed_ms = elapsed_ms_since(started_at),
       }
     end
   end
 
   emit_status('authenticating', 'Authenticating with Copilot')
-  get_api_token(request, function(token)
+  local auth_job = get_api_token(request, function(token)
     if is_cancelled(request) then
       return
     end
@@ -211,7 +225,7 @@ function M.chat(request)
         request.callback(nil, {
           requested_model = request.model,
           used_model = request.model,
-          elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6,
+          elapsed_ms = elapsed_ms_since(started_at),
           error = 'copilot authentication failed',
         })
       end
@@ -224,12 +238,14 @@ function M.chat(request)
     headers['Content-Type'] = 'application/json'
 
     local requested_model = request.model or AUTO_MODEL
-    local active_job = nil
 
     local function send_chat(model, retried_auto)
+      local chunks = {}
+      local used_model = model or AUTO_MODEL
+      local stream_error = nil
       local body = {
         messages = { { role = 'user', content = request.prompt } },
-        stream = false,
+        stream = request.stream ~= false,
         max_tokens = request.max_tokens,
       }
       if model and model ~= AUTO_MODEL then
@@ -237,6 +253,91 @@ function M.chat(request)
       end
 
       emit_status('generating', 'Generating response')
+      if body.stream then
+        active_job = curl.stream_json_lines {
+          method = 'POST',
+          url = endpoint .. '/chat/completions',
+          headers = headers,
+          body = body,
+          timeout = request.timeout or 30000,
+          is_cancelled = request.is_cancelled,
+          on_json_line = function(data)
+            if is_cancelled(request) then
+              return
+            end
+
+            used_model = data.model or used_model
+            if data.error then
+              stream_error = data.error
+            end
+            local choice = data.choices and data.choices[1]
+            local delta = choice and choice.delta and choice.delta.content
+            if type(delta) ~= 'string' or delta == '' then
+              return
+            end
+
+            table.insert(chunks, delta)
+            if request.on_chunk then
+              request.on_chunk(delta, data, 'message')
+            end
+          end,
+          callback = function(code, error_message, status)
+            if is_cancelled(request) then
+              return
+            end
+
+            local elapsed_ms = elapsed_ms_since(started_at)
+            if code ~= 0 or (status and status >= 400) or stream_error then
+              local error_message_with_status = 'copilot api request failed: ' .. tostring(status or code)
+              local error_code = type(stream_error) == 'table' and stream_error.code or nil
+              local error_body = error_message or (stream_error and vim.json.encode(stream_error)) or nil
+              log.error(string.format('%s elapsed_ms=%.0f body=%s', error_message_with_status, elapsed_ms, format_body_for_log(error_body)))
+              if status == 400 and (error_code == 'unsupported_api_for_model' or (error_body and error_body:match 'unsupported_api_for_model')) and body.model and not retried_auto then
+                log.warn('copilot model unsupported by streaming chat completions, retrying with auto: ' .. tostring(body.model))
+                send_chat(AUTO_MODEL, true)
+                return
+              end
+
+              if request.callback then
+                request.callback(nil, {
+                  requested_model = requested_model,
+                  used_model = used_model,
+                  elapsed_ms = elapsed_ms,
+                  error = error_message_with_status,
+                })
+              end
+              return
+            end
+
+            local message = table.concat(chunks, '')
+            if message == '' then
+              log.error('copilot streaming response missing message')
+              if request.callback then
+                request.callback(nil, {
+                  requested_model = requested_model,
+                  used_model = used_model,
+                  elapsed_ms = elapsed_ms,
+                  error = 'copilot returned no content',
+                })
+              end
+              return
+            end
+
+            log.info(string.format('copilot streaming response requested_model=%s used_model=%s elapsed_ms=%.0f', requested_model, used_model, elapsed_ms))
+            emit_status('done', 'Response complete')
+            if request.callback then
+              request.callback(message, {
+                requested_model = requested_model,
+                used_model = used_model,
+                elapsed_ms = elapsed_ms,
+              })
+            end
+          end,
+        }
+        register_job(request, active_job)
+        return
+      end
+
       active_job = curl.json {
         method = 'POST',
         url = endpoint .. '/chat/completions',
@@ -248,7 +349,7 @@ function M.chat(request)
             return
           end
 
-          local elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6
+          local elapsed_ms = elapsed_ms_since(started_at)
           if response.status ~= 200 then
             local error_code = response.json and response.json.error and response.json.error.code
             if response.status == 400 and error_code == 'unsupported_api_for_model' and body.model and not retried_auto then
@@ -301,8 +402,11 @@ function M.chat(request)
     end
 
     send_chat(request.model or AUTO_MODEL, false)
-    return active_job
   end)
+  if auth_job then
+    active_job = auth_job
+  end
+  return proxy_job
 end
 
 return M

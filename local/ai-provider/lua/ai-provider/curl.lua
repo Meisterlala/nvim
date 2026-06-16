@@ -100,7 +100,7 @@ end
 ---@field timeout? integer Curl max-time in milliseconds.
 ---@field is_cancelled? fun(): boolean Optional cancellation predicate.
 ---@field on_json_line? fun(data: table, line: string) Called for each decoded JSON line.
----@field callback fun(code: integer, error: string|nil) Called when curl exits.
+---@field callback fun(code: integer, error: string|nil, status: integer|nil) Called when curl exits.
 
 ---Run a streaming curl request and decode each stdout line as JSON.
 ---@param request AiProviderCurlStreamRequest
@@ -110,6 +110,7 @@ function M.stream_json_lines(request)
   local body = encode_body(request.body)
   local method = request.method or 'POST'
   local timeout = request.timeout or DEFAULT_TIMEOUT
+  local status_marker = '__AI_PROVIDER_HTTP_STATUS__:'
   local args = {
     '--silent',
     '--show-error',
@@ -118,6 +119,8 @@ function M.stream_json_lines(request)
     tostring(math.ceil(timeout / 1000)),
     '--request',
     method,
+    '--write-out',
+    '\n' .. status_marker .. '%{http_code}',
   }
 
   for name, value in pairs(json_headers(request.headers)) do
@@ -133,21 +136,43 @@ function M.stream_json_lines(request)
   table.insert(args, request.url)
 
   local stderr = {}
+  local stdout_lines = {}
+  local http_status = nil
   local job = Job:new {
     command = 'curl',
     args = args,
-    on_stdout = function(_, line)
-      if not line or line == '' or (request.is_cancelled and request.is_cancelled()) then
+    on_stdout = function(_, output)
+      if not output or output == '' or (request.is_cancelled and request.is_cancelled()) then
         return
       end
 
-      local ok, data = pcall(vim.json.decode, line)
-      if not ok or type(data) ~= 'table' then
-        return
-      end
+      for line in tostring(output):gmatch('[^\r\n]+') do
+        line = line:gsub('^%s+', ''):gsub('%s+$', '')
+        if line ~= '' then
+          local status = line:match('^' .. status_marker .. '(%d+)$')
+          if status then
+            http_status = tonumber(status)
+          else
+            local payload = line
+            local event_data = line:match '^data:%s*(.*)$'
+            if event_data then
+              if event_data == '[DONE]' then
+                goto continue
+              end
+              payload = event_data
+            end
 
-      if request.on_json_line then
-        request.on_json_line(data, line)
+            if #stdout_lines < 20 then
+              table.insert(stdout_lines, payload)
+            end
+
+            local ok, data = pcall(vim.json.decode, payload)
+            if ok and type(data) == 'table' and request.on_json_line then
+              schedule(request.on_json_line, data, line)
+            end
+          end
+        end
+        ::continue::
       end
     end,
     on_stderr = function(_, line)
@@ -156,7 +181,14 @@ function M.stream_json_lines(request)
       end
     end,
     on_exit = function(_, code)
-      schedule(request.callback, code, #stderr > 0 and table.concat(stderr, '\n') or nil)
+      local error_parts = {}
+      if #stderr > 0 then
+        table.insert(error_parts, table.concat(stderr, '\n'))
+      end
+      if http_status and http_status >= 400 and #stdout_lines > 0 then
+        table.insert(error_parts, table.concat(stdout_lines, '\n'))
+      end
+      schedule(request.callback, code, #error_parts > 0 and table.concat(error_parts, '\n') or nil, http_status)
     end,
   }
 

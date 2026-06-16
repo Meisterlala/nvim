@@ -392,24 +392,25 @@ function M.chat(request)
           queue_chunk(chunk, data, 'message')
         end
       end,
-      callback = function(code, error_message)
+      callback = function(code, error_message, status)
         if is_cancelled(request) then
           return
         end
 
-        if code ~= 0 then
-          log.error('ollama request process failed code=' .. tostring(code) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_message))
+        if code ~= 0 or (status and status >= 400) then
+          local error_detail = error_message or (status and ('HTTP ' .. status) or 'ollama request failed')
+          log.error('ollama request process failed code=' .. tostring(code) .. ' status=' .. tostring(status) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_detail))
           if request.callback then
             request.callback(nil, {
               requested_model = selected_model,
               used_model = final_model,
               elapsed_ms = (vim.uv.hrtime() - started_at) / 1e6,
-              error = error_message or 'ollama request failed',
+              error = error_detail,
             })
           end
           emit_status {
             phase = 'error',
-            message = error_message or 'Ollama request failed',
+            message = error_detail,
           }
           return
         end
@@ -535,6 +536,10 @@ function M.chat(request)
       emit_status {
         phase = 'loading',
         message = 'Loading model',
+      }
+      emit_status {
+        phase = 'context',
+        message = 'Loading prompt context',
       }
     else
       emit_status {

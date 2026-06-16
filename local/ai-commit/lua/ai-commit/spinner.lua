@@ -197,6 +197,12 @@ function M.append_stream(spinner, text)
   if not spinner or not text or text == '' then
     return
   end
+  if vim.in_fast_event() then
+    vim.schedule(function()
+      M.append_stream(spinner, text)
+    end)
+    return
+  end
 
   local chunks = vim.split(text, '\n', { plain = true })
   for index, chunk in ipairs(chunks) do
