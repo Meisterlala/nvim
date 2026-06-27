@@ -1,14 +1,14 @@
--- Import the model fetcher utility
-local model_fetcher = require 'model_fetcher'
-
 --- @type LazySpec
 return {
   'yetone/avante.nvim',
+  enabled = false,
   event = 'VeryLazy',
   version = false, -- Never set to "*"
   -- Build function
   build = vim.fn.has 'win32' == 1 and 'powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false' or 'make',
   config = function()
+    local model_fetcher = require 'model_fetcher'
+
     ---@module 'avante'
     ---@type avante.Config
     local opt = {
