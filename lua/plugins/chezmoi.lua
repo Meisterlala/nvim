@@ -16,6 +16,87 @@ return {
 
       local chezmoi_dir = vim.env.HOME .. '/.local/share/chezmoi'
 
+      -- Encrypted source files (chezmoi's "encrypted_" attribute) are ciphertext on
+      -- disk, so they can't be opened/watched like plain source files: chezmoi.nvim's
+      -- own edit/watch just reads and writes the source file verbatim, which would
+      -- edit the raw ciphertext. These helpers decrypt/encrypt through `chezmoi`
+      -- itself instead of reimplementing age, and never touch a plaintext temp file
+      -- on disk (unlike `chezmoi edit`), so decrypted content only ever lives in the
+      -- nvim buffer.
+      local function is_encrypted(source_path)
+        return vim.fn.fnamemodify(source_path, ':t'):match '^encrypted_' ~= nil
+      end
+
+      local function encrypt_and_apply(buf, source_path)
+        local content = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), '\n') .. '\n'
+
+        local enc = vim.system({ 'chezmoi', 'encrypt', '-o', source_path }, { stdin = content, text = true }):wait()
+        if enc.code ~= 0 then
+          vim.notify('chezmoi: encrypt failed\n' .. (enc.stderr or ''), vim.log.levels.ERROR)
+          return
+        end
+
+        local app = vim.system({ 'chezmoi', 'apply', '--source-path', source_path }, { text = true }):wait()
+        if app.code ~= 0 then
+          vim.notify('chezmoi: apply failed\n' .. (app.stderr or ''), vim.log.levels.ERROR)
+          return
+        end
+
+        vim.bo[buf].modified = false
+        vim.notify('chezmoi: applied ' .. vim.fn.fnamemodify(source_path, ':t'), vim.log.levels.INFO)
+      end
+
+      -- Opening the source file directly: it currently holds raw ciphertext, so
+      -- replace it with a virtual buffer holding the decrypted content.
+      ---@param old_buf number
+      ---@param source_path string
+      ---@param target_path string? already known target path; resolved via `chezmoi target-path` if omitted
+      local function edit_encrypted_source(old_buf, source_path, target_path)
+        if not target_path then
+          local target = vim.system({ 'chezmoi', 'target-path', source_path }, { text = true }):wait()
+          if target.code ~= 0 then
+            vim.notify('chezmoi: could not resolve target path\n' .. (target.stderr or ''), vim.log.levels.ERROR)
+            return
+          end
+          target_path = vim.trim(target.stdout)
+        end
+
+        local buf_name = 'chezmoi://' .. vim.fn.fnamemodify(target_path, ':~')
+        local existing = vim.fn.bufnr(buf_name)
+        if existing ~= -1 and existing ~= old_buf then
+          vim.api.nvim_set_current_buf(existing)
+          vim.api.nvim_buf_delete(old_buf, { force = true })
+          return
+        end
+
+        local dec = vim.system({ 'chezmoi', 'decrypt', source_path }, { text = true }):wait()
+        if dec.code ~= 0 then
+          vim.notify('chezmoi: decrypt failed\n' .. (dec.stderr or ''), vim.log.levels.ERROR)
+          return
+        end
+
+        local buf = vim.api.nvim_create_buf(true, false)
+        vim.api.nvim_buf_set_name(buf, buf_name)
+        vim.bo[buf].buftype = 'acwrite'
+        vim.bo[buf].bufhidden = 'wipe' -- don't let decrypted content linger in a hidden buffer
+        vim.bo[buf].swapfile = false
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split((dec.stdout:gsub('\n$', '')), '\n', { plain = true }))
+        vim.bo[buf].modified = false
+
+        local ft = vim.filetype.match { filename = target_path } or ''
+        vim.bo[buf].filetype = source_path:match '%.tmpl%.age$' and (ft .. '.chezmoitmpl') or ft
+
+        vim.api.nvim_create_autocmd('BufWriteCmd', {
+          buffer = buf,
+          callback = function()
+            encrypt_and_apply(buf, source_path)
+          end,
+        })
+
+        vim.api.nvim_set_current_buf(buf)
+        vim.api.nvim_buf_delete(old_buf, { force = true })
+      end
+
       vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
         group = vim.api.nvim_create_augroup('chezmoi_auto_edit', { clear = true }),
         callback = function(ev)
@@ -31,7 +112,11 @@ return {
           -- If already in chezmoi source dir, enable auto-apply
           if vim.startswith(filepath, chezmoi_dir .. '/') then
             vim.schedule(function()
-              require('chezmoi.commands.__edit').watch(ev.buf)
+              if is_encrypted(filepath) then
+                edit_encrypted_source(ev.buf, filepath)
+              else
+                require('chezmoi.commands.__edit').watch(ev.buf)
+              end
             end)
             return
           end
@@ -48,10 +133,14 @@ return {
             handle:close()
 
             if source_path and source_path ~= '' then
-              require('chezmoi.commands.__edit').execute {
-                targets = { filepath },
-                args = { '--watch' },
-              }
+              if is_encrypted(source_path) then
+                edit_encrypted_source(ev.buf, source_path, filepath)
+              else
+                require('chezmoi.commands.__edit').execute {
+                  targets = { filepath },
+                  args = { '--watch' },
+                }
+              end
             end
           end)
         end,
