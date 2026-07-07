@@ -62,6 +62,7 @@ return {
       },
       indent = { enabled = false },
       input = { enabled = true },
+      lazygit = { enabled = false },
       notifier = { enabled = false },
       git = { enabled = false },
       image = { enabled = false },
