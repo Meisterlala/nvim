@@ -4,6 +4,7 @@ local log = require('ai-commit.log').get
 
 local providers = {
   require('ai-commit.session_context.opencode').get_recent,
+  require('ai-commit.session_context.claude').get_recent,
 }
 
 local M = {}
@@ -49,6 +50,7 @@ local function collection_plan(opts)
   local plan = {
     recent_commits = context_opts.recent_commits ~= false,
     opencode = context_opts.opencode ~= false,
+    claude = context_opts.claude ~= false,
     staged_changes = context_opts.staged_changes ~= false,
     refinement_recent_commits = refinement_opts.enabled ~= false
       and refinement_opts.recent_commits_with_body ~= false
@@ -58,6 +60,8 @@ local function collection_plan(opts)
   if opts and type(opts.include) == 'table' then
     plan = vim.tbl_extend('force', plan, opts.include)
   end
+
+  plan.session_context = plan.opencode or plan.claude
 
   return plan
 end
@@ -76,7 +80,7 @@ function M.collect(callback, opts)
   if plan.recent_commits then
     pending = pending + 1
   end
-  if plan.opencode then
+  if plan.session_context then
     pending = pending + 1
   end
   if plan.staged_changes then
@@ -174,7 +178,7 @@ function M.collect(callback, opts)
     end, true)
   end
 
-  if plan.opencode then
+  if plan.session_context then
     M.get_recent(function(session)
       if is_cancelled() or finished then
         return

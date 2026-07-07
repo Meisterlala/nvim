@@ -31,7 +31,7 @@ local function set_stage_status(spinner, stage_text, diff_meta, last_status_line
   local active_prefix, active_model, active_suffix = stage_text:match '^(Generating commit message with )(.+)( %(.-%))$'
 
   if not active_prefix then
-    active_prefix, active_model, active_suffix = stage_text:match '^(OpenCode: Summarizing session with )(.+)( %(.-%))$'
+    active_prefix, active_model, active_suffix = stage_text:match '^(.-: Summarizing session with )(.+)( %(.-%))$'
   end
   if not active_prefix then
     active_prefix, active_model, active_suffix = stage_text:match '^(%d+%. Refinement with )(.+)( %(.-%))$'

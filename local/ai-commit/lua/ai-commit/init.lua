@@ -14,7 +14,7 @@ function M.setup(opts)
   local ok, ai_provider = pcall(require, 'ai-provider')
   if ok then
     local sources = {
-      { id = config.summary_source_id, name = 'AI Commit: OpenCode Summary' },
+      { id = config.summary_source_id, name = 'AI Commit: Session Summary' },
       { id = config.message_source_id, name = 'AI Commit: Commit Message' },
       { id = config.refine_source_id, name = 'AI Commit: Refinement' },
     }

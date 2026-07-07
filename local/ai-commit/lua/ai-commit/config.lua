@@ -7,6 +7,7 @@ M.refine_source_id = 'ai-commit-refine'
 M.values = {
   context = {
     opencode = true,
+    claude = true,
     recent_commits = true,
     staged_changes = true,
   },
@@ -35,6 +36,13 @@ M.values = {
   prompt_dump_dir = vim.fn.stdpath 'log' .. '/ai-commit-promts',
   opencode_context = {
     db_path = vim.fn.expand '~/.local/share/opencode/opencode.db',
+    recent_ms = 60 * 60 * 1000,
+    recent_user_messages = 4,
+    max_message_chars = 5000,
+    max_transcript_chars = 30000,
+  },
+  claude_context = {
+    projects_dir = vim.fn.expand '~/.claude/projects',
     recent_ms = 60 * 60 * 1000,
     recent_user_messages = 4,
     max_message_chars = 5000,
