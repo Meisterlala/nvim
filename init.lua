@@ -127,10 +127,19 @@ vim.opt.splitbelow = true -- Horizontal splits open below
 
 vim.opt.laststatus = 3
 
--- [[ Clipboard Integration (optional) ]]
---vim.schedule(function()
---  vim.opt.clipboard = 'unnamedplus'     -- Uncomment to use the system clipboard
---end)
+-- [[ Clipboard Integration ]]
+-- OSC 52: terminal-based clipboard, works cross-platform (macOS/Linux/Windows/SSH)
+vim.g.clipboard = {
+  name = 'OSC 52',
+  copy = {
+    ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+    ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+  },
+  paste = {
+    ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+    ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+  },
+}
 
 -- Disable basic providers
 vim.g.loaded_node_provider = 0
@@ -194,6 +203,7 @@ end, { desc = '[D]ate and time' })
 
 -- Yank to system clipboard with leader+y
 vim.keymap.set({ 'n', 'v' }, '<leader>y', [["+y]], { desc = '[Y]ank to system clipboard' })
+vim.keymap.set('n', '<leader>Y', [["+Y]], { desc = '[Y]ank to end of line to system clipboard' })
 
 -- Change fold, to toggle on zz
 vim.keymap.set('n', 'zz', 'za', { desc = 'Toggle fold at current cursor position' })
