@@ -69,16 +69,12 @@ local function my_fileinfo()
   end
 
   -- Get Treesitter language icon (fallback to none if parser missing)
-  if ft_icon == '' then
-    local ts_ok, parsers = pcall(require, 'nvim-treesitter.parsers')
-    if ts_ok then
-      local ok_lang, lang = pcall(parsers.get_buf_lang, 0)
-      lang = (ok_lang and lang) or ''
-      if lang ~= '' and devicons_ok then
-        local ok_icon, icon = pcall(devicons.get_icon_by_filetype, lang, { default = true })
-        if ok_icon and icon then
-          ft_icon = icon .. ' '
-        end
+  if ft_icon == '' and filetype ~= '' then
+    local lang = vim.treesitter.language.get_lang(filetype) or ''
+    if lang ~= '' and devicons_ok then
+      local ok_icon, icon = pcall(devicons.get_icon_by_filetype, lang, { default = true })
+      if ok_icon and icon then
+        ft_icon = icon .. ' '
       end
     end
   end

@@ -1,6 +1,7 @@
 --- @type LazySpec | LazySpec[]
 return {
-  'nvim-treesitter/nvim-treesitter',
+  'neovim-treesitter/nvim-treesitter',
+  dependencies = { 'neovim-treesitter/treesitter-parser-registry' },
   build = ':TSUpdate',
   lazy = false,
   branch = 'main',
@@ -9,11 +10,9 @@ return {
     local install_dir = vim.fn.stdpath 'data' .. '/site'
     vim.opt.rtp:prepend(install_dir)
 
-    -- Setup nvim-treesitter (new main branch uses minimal config)
+    -- Setup nvim-treesitter
     require('nvim-treesitter').setup {
       install_dir = install_dir,
-      ensure_installed = {},
-      auto_install = true,
     }
 
     -- Enable Folding
@@ -40,6 +39,18 @@ return {
         local ok, stats = pcall(vim.uv.fs_stat, vim.api.nvim_buf_get_name(buf))
         if ok and stats and stats.size > (max_size_mb * 1024 * 1024) then
           return
+        end
+
+        local ft = vim.bo[buf].filetype
+        if ft == '' then
+          return
+        end
+
+        -- auto_install was removed upstream; install the parser ourselves if missing
+        local ts = require 'nvim-treesitter'
+        local lang = vim.treesitter.language.get_lang(ft) or ft
+        if not vim.list_contains(ts.get_installed 'parsers', lang) and vim.list_contains(ts.get_available(), lang) then
+          pcall(function() ts.install({ lang }):wait(30000) end)
         end
 
         -- Enable treesitter highlighting

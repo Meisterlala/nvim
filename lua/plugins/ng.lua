@@ -15,14 +15,10 @@ return {
         },
       }
 
-      -- Ensure Treesitter is configured to include Angular
-      local ok, ts_config = pcall(require, 'nvim-treesitter.configs')
-      if ok then
-        local ensure = ts_config.get_module 'ensure_installed' or {}
-        if type(ensure) == 'table' and not vim.tbl_contains(ensure, 'angular') then
-          ---@diagnostic disable-next-line: missing-fields
-          ts_config.setup { ensure_installed = vim.list_extend(ensure, { 'angular' }) }
-        end
+      -- Ensure the Angular parser is installed
+      local ok, ts = pcall(require, 'nvim-treesitter')
+      if ok and not vim.list_contains(ts.get_installed 'parsers', 'angular') then
+        pcall(function() ts.install({ 'angular' }):wait(30000) end)
       end
 
       -- Key mappings for Angular navigation

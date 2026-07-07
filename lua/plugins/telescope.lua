@@ -48,7 +48,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
   cmd = 'Telescope',
   branch = 'master',
   dependencies = {
-    { 'nvim-treesitter/nvim-treesitter' },
+    { 'neovim-treesitter/nvim-treesitter' },
     'nvim-lua/plenary.nvim',
     { 'nvim-telescope/telescope-ui-select.nvim' },
 
