@@ -9,6 +9,16 @@ return {
       'nvim-telescope/telescope.nvim', -- optional
     },
     config = function()
+      vim.api.nvim_create_autocmd('User', {
+        pattern = { 'NeogitPushComplete', 'NeogitPullComplete', 'NeogitFetchComplete' },
+        callback = function()
+          local status = require 'neogit.buffers.status'
+          if status.is_open() then
+            status.instance():dispatch_refresh(nil, 'neogit_remote_event')
+          end
+        end,
+      })
+
       require('neogit').setup {
         -- Hides the hints at the top of the status buffer
         disable_hint = false,
