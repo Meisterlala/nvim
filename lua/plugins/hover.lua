@@ -65,8 +65,26 @@ return {
     -- Keep the "Invalid window id" fix
     local util = require('hover.util')
     local original_open = util.open_floating_preview
-    util.open_floating_preview = function(...)
-      local winid = original_open(...)
+    util.open_floating_preview = function(contents, bufnr, syntax, opts)
+      -- yaml-language-server escapes backticks that are already valid markdown
+      -- in hover descriptions (e.g. `` \`status: False\` `` instead of `` `status: False` ``).
+      -- Strip the stray escapes so render-markdown.nvim can style them as code spans.
+      if contents and syntax == 'markdown' then
+        local has_yamlls = false
+        for _, client in ipairs(vim.lsp.get_clients { bufnr = vim.api.nvim_get_current_buf() }) do
+          if client.name == 'yamlls' then
+            has_yamlls = true
+            break
+          end
+        end
+        if has_yamlls then
+          for i, line in ipairs(contents) do
+            contents[i] = line:gsub('\\`', '`')
+          end
+        end
+      end
+
+      local winid = original_open(contents, bufnr, syntax, opts)
       if not winid or not vim.api.nvim_win_is_valid(winid) then
         return winid
       end
