@@ -17,6 +17,7 @@ M.values = {
   preview_max_chars = 4000,
   max_diff_chars = 100000,
   prompt_context_ratio = 0.8,
+  prompt_chars_per_token = 3,
   refinement = {
     enabled = true,
     max_iterations = 2,

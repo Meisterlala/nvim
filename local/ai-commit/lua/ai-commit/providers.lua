@@ -387,7 +387,9 @@ local function prompt_budget_chars(source_id)
 
   local ratio = tonumber(config.values.prompt_context_ratio) or 0.8
   ratio = math.max(0.1, math.min(ratio, 1))
-  return math.floor(context_size * ratio), context_size
+  local chars_per_token = tonumber(config.values.prompt_chars_per_token) or 3
+  chars_per_token = math.max(1, chars_per_token)
+  return math.floor(context_size * ratio * chars_per_token), context_size
 end
 
 local function commit_prompt_with_budget(branch, recent_commits, session_summary, diff_stat, diff)

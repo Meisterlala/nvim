@@ -10,6 +10,7 @@ return {
     providers = {
       copilot = {
         default_model = 'auto',
+        context_size = 12288,
       },
       ollama = {
         default_model = 'gemma4:e2b',
