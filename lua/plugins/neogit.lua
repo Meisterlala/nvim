@@ -10,12 +10,14 @@ return {
     },
     config = function()
       vim.api.nvim_create_autocmd('User', {
-        pattern = { 'NeogitPushComplete', 'NeogitPullComplete', 'NeogitFetchComplete' },
+        pattern = { 'NeogitCommitComplete', 'NeogitPushComplete', 'NeogitPullComplete', 'NeogitFetchComplete' },
         callback = function()
-          local status = require 'neogit.buffers.status'
-          if status.is_open() then
-            status.instance():dispatch_refresh(nil, 'neogit_remote_event')
-          end
+          vim.defer_fn(function()
+            local status = require 'neogit.buffers.status'
+            if status.is_open() then
+              status.instance():dispatch_refresh(nil, 'neogit_operation_complete')
+            end
+          end, 100)
         end,
       })
 
@@ -41,6 +43,13 @@ return {
         kind = 'split_below',
         -- Show message with spinning animation when a git command is running.
         process_spinner = false,
+        git_services = {
+          ['forgejo.meisterlala.dev'] = {
+            pull_request = 'https://${host}/${owner}/${repository}/compare/${branch_name}',
+            commit = 'https://${host}/${owner}/${repository}/commit/${oid}',
+            tree = 'https://${host}/${owner}/${repository}/src/branch/${branch_name}',
+          },
+        },
         -- Used to generate URL's for branch popup action "pull request".
         -- Allows a different telescope sorter. Defaults to 'fuzzy_with_index_bias'. The example below will use the native fzf
         -- sorter instead. By default, this function returns `nil`.
