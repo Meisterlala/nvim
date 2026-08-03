@@ -132,12 +132,12 @@ vim.opt.laststatus = 3
 vim.g.clipboard = {
   name = 'OSC 52',
   copy = {
-    ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-    ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+    ['+'] = require('vim.ui.clipboard.osc52').copy '+',
+    ['*'] = require('vim.ui.clipboard.osc52').copy '*',
   },
   paste = {
-    ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-    ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+    ['+'] = require('vim.ui.clipboard.osc52').paste '+',
+    ['*'] = require('vim.ui.clipboard.osc52').paste '*',
   },
 }
 
@@ -181,6 +181,12 @@ vim.keymap.set('n', '<C-left>', '<C-w><C-h>', { desc = 'Move focus to the left w
 vim.keymap.set('n', '<C-right>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-down>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-up>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+
+-- Resize windows
+vim.keymap.set('n', '<A-left>', '<C-w><', { desc = 'Decrease window width' })
+vim.keymap.set('n', '<A-right>', '<C-w>>', { desc = 'Increase window width' })
+vim.keymap.set('n', '<A-down>', '<C-w>-', { desc = 'Decrease window height' })
+vim.keymap.set('n', '<A-up>', '<C-w>+', { desc = 'Increase window height' })
 
 -- Keybind for scrolling up or down with page-up and page-down
 vim.keymap.set('n', '<PageUp>', '<C-u>', { desc = 'Scroll up half a page' })
