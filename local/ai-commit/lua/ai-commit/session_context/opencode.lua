@@ -239,6 +239,7 @@ local function read_session_messages(db_path, session, callback, status_callback
         title = session.title or session.id,
         directory = session.directory or vim.fn.getcwd(),
         transcript = transcript,
+        updated_at = tonumber(session.time_updated),
       }
     end),
   }):start()

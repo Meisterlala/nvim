@@ -5,6 +5,7 @@ local log = require('ai-commit.log').get
 local providers = {
   require('ai-commit.session_context.opencode').get_recent,
   require('ai-commit.session_context.claude').get_recent,
+  require('ai-commit.session_context.pi').get_recent,
 }
 
 local M = {}
@@ -15,30 +16,56 @@ M.comment_char = git.comment_char
 ---@param status_callback function(string)|nil
 function M.get_recent(callback, status_callback)
   local logger = log()
-  local index = 1
+  local pending = #providers
+  local sessions = {}
 
-  local function try_next()
-    local provider = providers[index]
-    index = index + 1
+  local function provider_done(index, session)
+    if session then
+      session.provider_priority = index
+      table.insert(sessions, session)
+    end
+    pending = pending - 1
+    if pending > 0 then
+      return
+    end
 
-    if not provider then
+    table.sort(sessions, function(left, right)
+      local left_updated = tonumber(left.updated_at) or 0
+      local right_updated = tonumber(right.updated_at) or 0
+      if left_updated == right_updated then
+        return left.provider_priority < right.provider_priority
+      end
+      return left_updated > right_updated
+    end)
+
+    local selected = sessions[1]
+    if not selected then
       logger.debug 'No assistant session context provider returned context'
       callback(nil)
       return
     end
 
-    logger.debug('Trying assistant session context provider #' .. tostring(index - 1))
-    provider(function(session)
-      if session then
-        logger.debug('Assistant session context provider returned ' .. tostring(session.label or session.provider or 'unknown'))
-        callback(session)
-        return
-      end
-      try_next()
-    end, status_callback)
+    logger.debug(
+      string.format(
+        'Selected newest assistant session context (provider=%s updated_at=%s)',
+        tostring(selected.label or selected.provider or 'unknown'),
+        tostring(selected.updated_at)
+      )
+    )
+    callback(selected)
   end
 
-  try_next()
+  for index, provider in ipairs(providers) do
+    logger.debug('Loading assistant session context provider #' .. tostring(index))
+    local called = false
+    provider(function(session)
+      if called then
+        return
+      end
+      called = true
+      provider_done(index, session)
+    end, status_callback)
+  end
 end
 
 ---@param opts table|nil
@@ -51,6 +78,7 @@ local function collection_plan(opts)
     recent_commits = context_opts.recent_commits ~= false,
     opencode = context_opts.opencode ~= false,
     claude = context_opts.claude ~= false,
+    pi = context_opts.pi ~= false,
     staged_changes = context_opts.staged_changes ~= false,
     refinement_recent_commits = refinement_opts.enabled ~= false
       and refinement_opts.recent_commits_with_body ~= false
@@ -61,7 +89,7 @@ local function collection_plan(opts)
     plan = vim.tbl_extend('force', plan, opts.include)
   end
 
-  plan.session_context = plan.opencode or plan.claude
+  plan.session_context = plan.opencode or plan.claude or plan.pi
 
   return plan
 end

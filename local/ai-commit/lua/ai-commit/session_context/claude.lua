@@ -144,7 +144,7 @@ end
 
 ---@param dir string
 ---@param recent_ms integer
----@return string|nil
+---@return string|nil, integer|nil
 local function find_recent_session_file(dir, recent_ms)
   local handle = vim.uv.fs_scandir(dir)
   if not handle then
@@ -168,7 +168,7 @@ local function find_recent_session_file(dir, recent_ms)
       end
     end
   end
-  return best_path
+  return best_path, best_mtime and best_mtime * 1000 or nil
 end
 
 ---@param callback function(table|nil)
@@ -203,7 +203,7 @@ function M.get_recent(callback, status_callback)
   end
 
   logger.debug('Looking for recent Claude Code session (cwd=' .. cwd .. ' dir=' .. session_dir .. ')')
-  local session_file = find_recent_session_file(session_dir, opts.recent_ms or 60 * 60 * 1000)
+  local session_file, updated_at = find_recent_session_file(session_dir, opts.recent_ms or 60 * 60 * 1000)
   if not session_file then
     logger.debug('No recent Claude Code session found in ' .. session_dir)
     callback(nil)
@@ -233,6 +233,7 @@ function M.get_recent(callback, status_callback)
     title = title,
     directory = cwd,
     transcript = transcript,
+    updated_at = updated_at,
   }
 end
 

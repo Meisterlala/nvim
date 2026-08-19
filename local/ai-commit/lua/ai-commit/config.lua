@@ -8,6 +8,7 @@ M.values = {
   context = {
     opencode = true,
     claude = true,
+    pi = true,
     recent_commits = true,
     staged_changes = true,
   },
@@ -44,6 +45,13 @@ M.values = {
   },
   claude_context = {
     projects_dir = vim.fn.expand '~/.claude/projects',
+    recent_ms = 60 * 60 * 1000,
+    recent_user_messages = 4,
+    max_message_chars = 5000,
+    max_transcript_chars = 30000,
+  },
+  pi_context = {
+    sessions_dir = '',
     recent_ms = 60 * 60 * 1000,
     recent_user_messages = 4,
     max_message_chars = 5000,

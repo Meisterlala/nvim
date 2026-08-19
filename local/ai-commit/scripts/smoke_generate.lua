@@ -38,7 +38,7 @@ vim.cmd('cd ' .. vim.fn.fnameescape(repo))
 if staged_file and staged_file ~= '' then
   vim.fn.mkdir(vim.fn.fnamemodify(staged_file, ':h'), 'p')
   vim.fn.writefile(vim.split(staged_content, '\n', { plain = true }), staged_file)
-  if not system_ok({ 'git', 'add', staged_file }) then
+  if not system_ok { 'git', 'add', staged_file } then
     finish(2, { 'failed to stage test file: ' .. staged_file })
     return
   end
@@ -64,6 +64,9 @@ if not real_provider then
     end,
     get_selected_model = function()
       return 'fake-model'
+    end,
+    get_provider_config = function()
+      return { context_size = 32768 }
     end,
     check = function(_, callback)
       vim.schedule(function()
