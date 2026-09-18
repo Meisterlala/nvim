@@ -11,9 +11,14 @@ return {
     vim.opt.rtp:prepend(install_dir)
 
     -- Setup nvim-treesitter
-    require('nvim-treesitter').setup {
+    local ts = require 'nvim-treesitter'
+    ts.setup {
       install_dir = install_dir,
     }
+
+    if not vim.list_contains(ts.get_installed 'parsers', 'regex') then
+      pcall(function() ts.install({ 'regex' }):wait(30000) end)
+    end
 
     -- Enable Folding
     vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
@@ -49,8 +54,21 @@ return {
         -- auto_install was removed upstream; install the parser ourselves if missing
         local ts = require 'nvim-treesitter'
         local lang = vim.treesitter.language.get_lang(ft) or ft
-        if not vim.list_contains(ts.get_installed 'parsers', lang) and vim.list_contains(ts.get_available(), lang) then
-          pcall(function() ts.install({ lang }):wait(30000) end)
+        local installed = ts.get_installed 'parsers'
+        local to_install = {}
+        if not vim.list_contains(installed, lang) and vim.list_contains(ts.get_available(), lang) then
+          table.insert(to_install, lang)
+        end
+        local ok_registry, registry = pcall(require, 'treesitter-registry')
+        if ok_registry and registry.loaded and registry.loaded[lang] and registry.loaded[lang].requires then
+          for _, dep in ipairs(registry.loaded[lang].requires) do
+            if not vim.list_contains(installed, dep) then
+              table.insert(to_install, dep)
+            end
+          end
+        end
+        if #to_install > 0 then
+          pcall(function() ts.install(to_install):wait(30000) end)
         end
 
         -- Enable treesitter highlighting
