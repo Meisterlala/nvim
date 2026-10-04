@@ -5,7 +5,7 @@ return {
     'nvim-neotest/nvim-nio',
     'nvim-lua/plenary.nvim',
     'antoinemadec/FixCursorHold.nvim',
-    'neovim-treesitter/nvim-treesitter',
+    'nvim-treesitter/nvim-treesitter',
     'nvim-neotest/neotest-python',
   },
   opts = {

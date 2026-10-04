@@ -1,7 +1,6 @@
 --- @type LazySpec | LazySpec[]
 return {
-  'neovim-treesitter/nvim-treesitter',
-  dependencies = { 'neovim-treesitter/treesitter-parser-registry' },
+  'nvim-treesitter/nvim-treesitter',
   build = ':TSUpdate',
   lazy = false,
   branch = 'main',
