@@ -25,9 +25,33 @@ return {
     require('neotest').setup(opts)
   end,
   keys = {
-    { '<leader>ctt', function() require('neotest').run.run() end,                   desc = '[T]est nearest' },
-    { '<leader>ctf', function() require('neotest').run.run(vim.fn.expand('%')) end, desc = '[T]est [F]ile' },
-    { '<leader>cts', function() require('neotest').summary.toggle() end,            desc = '[T]est [S]ummary' },
-    { '<leader>cto', function() require('neotest').output_panel.toggle() end,       desc = '[T]est [O]utput' },
+    {
+      '<leader>ctt',
+      function()
+        require('neotest').run.run()
+      end,
+      desc = '[T]est nearest',
+    },
+    {
+      '<leader>ctf',
+      function()
+        require('neotest').run.run(vim.fn.expand '%')
+      end,
+      desc = '[T]est [F]ile',
+    },
+    {
+      '<leader>cts',
+      function()
+        require('neotest').summary.toggle()
+      end,
+      desc = '[T]est [S]ummary',
+    },
+    {
+      '<leader>cto',
+      function()
+        require('neotest').output_panel.toggle()
+      end,
+      desc = '[T]est [O]utput',
+    },
   },
 }

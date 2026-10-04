@@ -134,64 +134,93 @@ function M.commit_and_push_config_changes()
   local config_dir = vim.fn.stdpath 'config'
   local git_executable = vim.fn.executable 'git'
 
-  if not git_executable then
+  if git_executable == 0 then
     vim.notify('Git is not installed or not in PATH.', vim.log.levels.ERROR)
     M.commit_is_running = false
     return
   end
 
-  -- Check for changes (async)
-  vim.system({ 'git', 'diff', '--quiet' }, { text = true, cwd = config_dir }, function(obj)
-    if obj.code == 0 then
-      vim.schedule(function()
+  -- Include tracked, staged and untracked changes in the confirmation.
+  vim.system({ 'git', 'status', '--porcelain', '--untracked-files=all' }, { text = true, cwd = config_dir }, function(obj)
+    vim.schedule(function()
+      if obj.code ~= 0 then
+        vim.notify('Failed to check config status:\n' .. (obj.stderr or ''), vim.log.levels.ERROR)
+        M.commit_is_running = false
+        return
+      end
+      if not obj.stdout or obj.stdout == '' then
         vim.notify('No changes to commit.', vim.log.levels.INFO)
         M.commit_is_running = false
-        if M.refresh_nvim_config_git_status then
-          M.refresh_nvim_config_git_status()
-        end
-      end)
-      return
-    end
-
-    -- Stage changes
-    vim.system({ 'git', 'add', '.' }, { text = true, cwd = config_dir }, function(add_obj)
-      if add_obj.code ~= 0 then
-        vim.schedule(function()
-          vim.notify('Failed to add changes:\n' .. add_obj.stderr, vim.log.levels.ERROR)
-          M.commit_is_running = false
-          if M.refresh_nvim_config_git_status then
-            M.refresh_nvim_config_git_status()
-          end
-        end)
+        M.refresh_nvim_config_git_status()
         return
       end
 
-      -- Commit
-      local timestamp = tostring(os.date '%Y-%m-%d-%H:%M:%S')
-      vim.system({ 'git', 'commit', '-m', timestamp }, { text = true, cwd = config_dir }, function(commit_obj)
-        if commit_obj.code ~= 0 then
-          vim.schedule(function()
-            vim.notify('Failed to commit:\n' .. commit_obj.stderr, vim.log.levels.ERROR)
-            M.commit_is_running = false
-            if M.refresh_nvim_config_git_status then
-              M.refresh_nvim_config_git_status()
-            end
-          end)
+      vim.ui.select({ 'Cancel', 'Commit and push' }, {
+        prompt = 'Config changes:\n' .. obj.stdout,
+      }, function(choice)
+        if choice ~= 'Commit and push' then
+          M.commit_is_running = false
           return
         end
+        -- Stage changes only after the user has reviewed the status.
+        vim.system({ 'git', 'add', '.' }, { text = true, cwd = config_dir }, function(add_obj)
+          if add_obj.code ~= 0 then
+            vim.schedule(function()
+              vim.notify('Failed to add changes:\n' .. add_obj.stderr, vim.log.levels.ERROR)
+              M.commit_is_running = false
+              if M.refresh_nvim_config_git_status then
+                M.refresh_nvim_config_git_status()
+              end
+            end)
+            return
+          end
 
-        -- Push
-        vim.system({ 'git', 'push' }, { text = true, cwd = config_dir }, function(push_obj)
-          vim.schedule(function()
-            if push_obj.code ~= 0 then
-              vim.notify('Failed to push:\n' .. push_obj.stderr, vim.log.levels.ERROR)
-            else
-              vim.notify('Config changes committed and pushed.', vim.log.levels.INFO)
+          -- Git may have only ignored files or no staged changes after staging.
+          vim.system({ 'git', 'diff', '--cached', '--quiet' }, { text = true, cwd = config_dir }, function(diff_obj)
+            if diff_obj.code == 0 then
+              vim.schedule(function()
+                vim.notify('Nothing staged to commit.', vim.log.levels.INFO)
+                M.commit_is_running = false
+                M.refresh_nvim_config_git_status()
+              end)
+              return
+            elseif diff_obj.code ~= 1 then
+              vim.schedule(function()
+                vim.notify('Failed to check staged changes:\n' .. (diff_obj.stderr or ''), vim.log.levels.ERROR)
+                M.commit_is_running = false
+              end)
+              return
             end
-            M.commit_is_running = false
-            if M.refresh_nvim_config_git_status then
-              M.refresh_nvim_config_git_status()
-            end
+
+            -- Commit
+            local timestamp = tostring(os.date '%Y-%m-%d-%H:%M:%S')
+            vim.system({ 'git', 'commit', '-m', timestamp }, { text = true, cwd = config_dir }, function(commit_obj)
+              if commit_obj.code ~= 0 then
+                vim.schedule(function()
+                  vim.notify('Failed to commit:\n' .. commit_obj.stderr, vim.log.levels.ERROR)
+                  M.commit_is_running = false
+                  if M.refresh_nvim_config_git_status then
+                    M.refresh_nvim_config_git_status()
+                  end
+                end)
+                return
+              end
+
+              -- Push
+              vim.system({ 'git', 'push' }, { text = true, cwd = config_dir }, function(push_obj)
+                vim.schedule(function()
+                  if push_obj.code ~= 0 then
+                    vim.notify('Failed to push:\n' .. push_obj.stderr, vim.log.levels.ERROR)
+                  else
+                    vim.notify('Config changes committed and pushed.', vim.log.levels.INFO)
+                  end
+                  M.commit_is_running = false
+                  if M.refresh_nvim_config_git_status then
+                    M.refresh_nvim_config_git_status()
+                  end
+                end)
+              end)
+            end)
           end)
         end)
       end)

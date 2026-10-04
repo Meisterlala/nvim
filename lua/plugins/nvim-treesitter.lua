@@ -16,18 +16,20 @@ return {
     }
 
     if not vim.list_contains(ts.get_installed 'parsers', 'regex') then
-      pcall(function() ts.install({ 'regex' }):wait(30000) end)
+      ts.install({ 'regex' }):await(function(err)
+        if err then
+          vim.notify('Tree-sitter regex parser installation failed: ' .. tostring(err), vim.log.levels.ERROR)
+        end
+      end)
     end
 
     -- Enable Folding
-    vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
-    vim.wo.foldmethod = 'expr'
+    vim.opt.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.opt.foldmethod = 'expr'
     vim.opt.foldlevelstart = 99
 
-    -- Enable Treesitter-based indentation (experimental)
-    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
-
     -- Auto-attach treesitter to all buffers for highlighting
+    local installing = {}
     local augroup = vim.api.nvim_create_augroup('TreesitterAutoAttach', { clear = true })
     vim.api.nvim_create_autocmd({ 'FileType', 'BufEnter' }, {
       group = augroup,
@@ -67,10 +69,29 @@ return {
           end
         end
         if #to_install > 0 then
-          pcall(function() ts.install(to_install):wait(30000) end)
+          if installing[lang] then
+            installing[lang][buf] = true
+          else
+            installing[lang] = { [buf] = true }
+            ts.install(to_install):await(function(err)
+              local waiting = installing[lang]
+              installing[lang] = nil
+              if err then
+                vim.notify('Tree-sitter parser installation failed: ' .. tostring(err), vim.log.levels.ERROR)
+              else
+                for waiting_buf in pairs(waiting) do
+                  if vim.api.nvim_buf_is_valid(waiting_buf) then
+                    vim.bo[waiting_buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+                    pcall(vim.treesitter.start, waiting_buf)
+                  end
+                end
+              end
+            end)
+          end
+          return
         end
 
-        -- Enable treesitter highlighting
+        vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
         pcall(vim.treesitter.start, buf)
       end,
     })

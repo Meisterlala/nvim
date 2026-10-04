@@ -27,6 +27,7 @@ M.config = {
 
 -- dir -> context name, persisted to cache_dir/dir-contexts.json
 local dir_contexts = {}
+local active_schema_uri = nil
 
 local function dir_contexts_path()
   return Path:new(M.config.cache_dir, 'dir-contexts.json')
@@ -116,19 +117,26 @@ local function apply_context(context)
 
   -- Only tell yamlls about our schema once it actually exists on disk;
   -- pointing it at a not-yet-generated file makes it fail with "No content".
-  local schemas = {}
-  if schema_exists then
-    schemas[vim.uri_from_fname(tostring(schema_path))] = crd_file_mask()
-  end
+  local previous_schema_uri = active_schema_uri
+  active_schema_uri = schema_exists and vim.uri_from_fname(tostring(schema_path)) or nil
 
   if vim.lsp and vim.lsp.config then
-    -- `vim.lsp.config.yamlls.x = y` only mutates a freshly recomputed
-    -- snapshot returned by __index and silently fails to persist; the
-    -- function-call form is the only one that actually writes into
-    -- Neovim's config store.
-    vim.lsp.config('yamlls', {
-      settings = { yaml = { validate = true, schemaStore = { enable = false }, schemas = schemas } },
-    })
+    -- Preserve yamlls' own schema mappings and replace only the context URI.
+    -- Assigning the whole resolved config avoids a deep merge retaining the old URI.
+    local config = vim.lsp.config.yamlls or {}
+    local schemas = vim.deepcopy(((config.settings or {}).yaml or {}).schemas or {})
+    if previous_schema_uri then
+      schemas[previous_schema_uri] = nil
+    end
+    if active_schema_uri then
+      schemas[active_schema_uri] = crd_file_mask()
+    end
+    config.settings = config.settings or {}
+    config.settings.yaml = config.settings.yaml or {}
+    config.settings.yaml.validate = true
+    config.settings.yaml.schemaStore = { enable = false }
+    config.settings.yaml.schemas = schemas
+    vim.lsp.config.yamlls = config
 
     -- Config changes only apply to newly-started clients, so push them live
     -- to any already-running yamlls client too. This avoids restarting the
@@ -142,21 +150,16 @@ local function apply_context(context)
         -- Merge into the schemas the client already resolved (e.g. the
         -- kustomize/for_k8s entries from lsp/yamlls.lua) instead of
         -- replacing the table outright, which would otherwise drop them.
-        client.settings.yaml.schemas = vim.tbl_extend('force', client.settings.yaml.schemas or {}, schemas)
+        client.settings.yaml.schemas = client.settings.yaml.schemas or {}
+        if previous_schema_uri then
+          client.settings.yaml.schemas[previous_schema_uri] = nil
+        end
+        client.settings.yaml.schemas = vim.tbl_extend('force', client.settings.yaml.schemas, schemas)
         client:notify('workspace/didChangeConfiguration', { settings = client.settings })
       end
     else
       vim.lsp.enable 'yamlls'
     end
-  else
-    local lspconfig = require 'lspconfig'
-    lspconfig.yamlls.setup(vim.tbl_extend('force', lspconfig.yamlls.document_config.default_config, {
-      settings = {
-        yaml = {
-          schemas = schemas,
-        },
-      },
-    }))
   end
 end
 
@@ -260,6 +263,7 @@ function M.generate_schemas()
   local seen_types = {}
   local current_job = 0
   local total_jobs = 0
+  local failed_paths = {}
 
   local function fetch_schema(path, api, callback)
     path = path:gsub('/', '-')
@@ -274,7 +278,7 @@ function M.generate_schemas()
         end
 
         local ok, schema = pcall(vim.json.decode, table.concat(j:result(), '\n'))
-        if ok and schema.components and schema.components.schemas then
+        if ok and type(schema) == 'table' and schema.components and schema.components.schemas then
           fix_descriptions(schema.components.schemas)
           local updated_schemas = { ['components'] = { ['schemas'] = schema.components.schemas } }
 
@@ -303,9 +307,11 @@ function M.generate_schemas()
           local schema_path = schema_dir:joinpath(path .. '.json')
           schema_path:write(vim.json.encode(updated_schemas), 'w')
           Log.debug('Generated (' .. current_job .. '/' .. total_jobs .. '): ' .. tostring(schema_path))
+          callback(true)
+        else
+          Log.error('Invalid OpenAPI schema: ' .. api.serverRelativeURL)
+          callback(false)
         end
-
-        callback(true)
       end,
     }):start()
   end
@@ -313,7 +319,7 @@ function M.generate_schemas()
   fetch_openapi_job:after(function()
     local result = fetch_openapi_job:result()
     local ok, schema_list = pcall(vim.json.decode, table.concat(result, '\n'))
-    if not ok or not schema_list.paths then
+    if not ok or type(schema_list) ~= 'table' or not schema_list.paths then
       Log.error 'Failed to parse OpenAPI path list'
       if progress then
         vim.schedule(function()
@@ -335,6 +341,18 @@ function M.generate_schemas()
     local finished_workers = 0
 
     local function finish()
+      if #failed_paths > 0 then
+        vim.schedule(function()
+          if progress then
+            progress:cancel()
+          end
+          vim.notify(
+            string.format('Failed to fetch %d Kubernetes schemas; keeping previous schema index. See nvim-k8s-crd log.', #failed_paths),
+            vim.log.levels.ERROR
+          )
+        end)
+        return
+      end
       Path:new(all_file):write(vim.json.encode { ['oneOf'] = all_types }, 'w')
       Log.debug('Generated: ' .. tostring(all_file))
       if progress then
@@ -353,19 +371,23 @@ function M.generate_schemas()
       return
     end
 
-    -- Retries the same item (rather than advancing) until it succeeds.
-    local function fetch_with_retry(path_api, callback)
+    -- Bound retries so a broken connection or authorization cannot hang forever.
+    local function fetch_with_retry(path_api, attempt, callback)
       fetch_schema(path_api[1], path_api[2], function(res)
         if res then
           callback()
+        elseif attempt >= 3 then
+          table.insert(failed_paths, path_api[1])
+          Log.error('Giving up on schema: ' .. path_api[1])
+          callback()
         else
-          Log.debug('Retrying schema: ' .. path_api[1])
-          local timer = vim.loop.new_timer()
+          local timer = vim.uv.new_timer()
           timer:start(
-            100,
+            250 * 2 ^ (attempt - 1),
             0,
             vim.schedule_wrap(function()
-              fetch_with_retry(path_api, callback)
+              timer:close()
+              fetch_with_retry(path_api, attempt + 1, callback)
             end)
           )
         end
@@ -383,7 +405,7 @@ function M.generate_schemas()
         return
       end
 
-      fetch_with_retry(paths[idx], function()
+      fetch_with_retry(paths[idx], 1, function()
         current_job = current_job + 1
         if progress then
           -- fidget's report() calls vim.fn.mode() internally, which isn't

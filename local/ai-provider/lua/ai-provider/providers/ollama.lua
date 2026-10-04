@@ -394,7 +394,16 @@ function M.chat(request)
 
         if code ~= 0 or (status and status >= 400) then
           local error_detail = error_message or (status and ('HTTP ' .. status) or 'ollama request failed')
-          log.error('ollama request process failed code=' .. tostring(code) .. ' status=' .. tostring(status) .. ' model=' .. tostring(raw_model) .. ' error=' .. tostring(error_detail))
+          log.error(
+            'ollama request process failed code='
+              .. tostring(code)
+              .. ' status='
+              .. tostring(status)
+              .. ' model='
+              .. tostring(raw_model)
+              .. ' error='
+              .. tostring(error_detail)
+          )
           if request.callback then
             request.callback(nil, {
               requested_model = selected_model,

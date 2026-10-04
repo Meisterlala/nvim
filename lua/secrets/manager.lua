@@ -41,7 +41,7 @@ end
 ---@return boolean success
 ---@return string|nil error
 function M.decrypt(password)
-  if vim.fn.executable('openssl') ~= 1 then
+  if vim.fn.executable 'openssl' ~= 1 then
     return false, 'openssl not found. Install with: sudo pacman -S openssl'
   end
 
@@ -78,7 +78,7 @@ end
 ---@return boolean success
 ---@return string|nil error
 function M.encrypt(new_password)
-  if vim.fn.executable('openssl') ~= 1 then
+  if vim.fn.executable 'openssl' ~= 1 then
     return false, 'openssl not found. Install with: sudo pacman -S openssl'
   end
 
@@ -102,7 +102,7 @@ function M.encrypt(new_password)
     if not file then
       return false, 'Failed to read file'
     end
-    local content = file:read('*a')
+    local content = file:read '*a'
     file:close()
 
     -- Replace password line
@@ -225,14 +225,12 @@ vim.api.nvim_create_user_command('SecretManager', function(opts)
     if not ok then
       vim.notify('Decrypt failed: ' .. (err or 'unknown error'), vim.log.levels.ERROR)
     end
-
   elseif cmd == 'encrypt' then
     local new_password = args[2]
     local ok, err = M.encrypt(new_password)
     if not ok then
       vim.notify('Encrypt failed: ' .. (err or 'unknown error'), vim.log.levels.ERROR)
     end
-
   elseif cmd == 'load' or cmd == 'refresh' then
     M.load()
   elseif cmd == 'status' then

@@ -279,7 +279,6 @@ return {
     -- Copilot integration
     'zbirenbaum/copilot.lua',
 
-
     -- Markdown rendering for Avante
     {
       'MeanderingProgrammer/render-markdown.nvim',

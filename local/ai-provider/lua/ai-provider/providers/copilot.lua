@@ -292,7 +292,12 @@ function M.chat(request)
               local error_code = type(stream_error) == 'table' and stream_error.code or nil
               local error_body = error_message or (stream_error and vim.json.encode(stream_error)) or nil
               log.error(string.format('%s elapsed_ms=%.0f body=%s', error_message_with_status, elapsed_ms, format_body_for_log(error_body)))
-              if status == 400 and (error_code == 'unsupported_api_for_model' or (error_body and error_body:match 'unsupported_api_for_model')) and body.model and not retried_auto then
+              if
+                status == 400
+                and (error_code == 'unsupported_api_for_model' or (error_body and error_body:match 'unsupported_api_for_model'))
+                and body.model
+                and not retried_auto
+              then
                 log.warn('copilot model unsupported by streaming chat completions, retrying with auto: ' .. tostring(body.model))
                 send_chat(AUTO_MODEL, true)
                 return
@@ -311,7 +316,7 @@ function M.chat(request)
 
             local message = table.concat(chunks, '')
             if message == '' then
-              log.error('copilot streaming response missing message')
+              log.error 'copilot streaming response missing message'
               if request.callback then
                 request.callback(nil, {
                   requested_model = requested_model,

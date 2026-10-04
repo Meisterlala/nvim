@@ -18,7 +18,11 @@ return {
       -- Ensure the Angular parser is installed
       local ok, ts = pcall(require, 'nvim-treesitter')
       if ok and not vim.list_contains(ts.get_installed 'parsers', 'angular') then
-        pcall(function() ts.install({ 'angular' }):wait(30000) end)
+        ts.install({ 'angular' }):await(function(err)
+          if err then
+            vim.notify('Angular parser installation failed: ' .. tostring(err), vim.log.levels.ERROR)
+          end
+        end)
       end
 
       -- Key mappings for Angular navigation

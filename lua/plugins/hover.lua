@@ -35,8 +35,12 @@ return {
     }
 
     vim.keymap.set('n', 'K', hover.open, { desc = 'hover.nvim' })
-    vim.keymap.set('n', '<C-p>', function() hover.switch 'previous' end, { desc = 'hover.nvim (previous source)' })
-    vim.keymap.set('n', '<C-n>', function() hover.switch 'next' end, { desc = 'hover.nvim (next source)' })
+    vim.keymap.set('n', '<C-p>', function()
+      hover.switch 'previous'
+    end, { desc = 'hover.nvim (previous source)' })
+    vim.keymap.set('n', '<C-n>', function()
+      hover.switch 'next'
+    end, { desc = 'hover.nvim (next source)' })
 
     local hover_enabled = false
     vim.o.mousemoveevent = false
@@ -55,15 +59,19 @@ return {
     vim.api.nvim_create_autocmd('CursorHold', {
       group = vim.api.nvim_create_augroup('hover_auto_open', { clear = true }),
       callback = function()
-        if not hover_enabled or vim.bo.buftype ~= '' then return end
+        if not hover_enabled or vim.bo.buftype ~= '' then
+          return
+        end
         local bufnr = vim.api.nvim_get_current_buf()
-        if vim.b[bufnr].hover_preview and vim.api.nvim_win_is_valid(vim.b[bufnr].hover_preview) then return end
+        if vim.b[bufnr].hover_preview and vim.api.nvim_win_is_valid(vim.b[bufnr].hover_preview) then
+          return
+        end
         pcall(hover.open)
       end,
     })
 
     -- Keep the "Invalid window id" fix
-    local util = require('hover.util')
+    local util = require 'hover.util'
     local original_open = util.open_floating_preview
     util.open_floating_preview = function(contents, bufnr, syntax, opts)
       -- yaml-language-server escapes backticks that are already valid markdown
@@ -92,11 +100,13 @@ return {
       local original_set = vim.api.nvim_set_option_value
       vim.api.nvim_set_option_value = function(name, val, opts)
         if opts and opts.win == winid then
-          if not vim.api.nvim_win_is_valid(winid) then return end
+          if not vim.api.nvim_win_is_valid(winid) then
+            return
+          end
         end
         return original_set(name, val, opts)
       end
-      
+
       return winid
     end
   end,

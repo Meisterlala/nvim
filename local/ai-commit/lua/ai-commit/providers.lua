@@ -524,7 +524,8 @@ function M.generate_commit_message(
     diff_stat = diff_stat,
     diff = diff,
   }
-  local prompt, _, prompt_diff, prompt_truncated, context_size, max_prompt_chars = commit_prompt_with_budget(branch, recent_commits, session_summary, diff_stat, diff)
+  local prompt, _, prompt_diff, prompt_truncated, context_size, max_prompt_chars =
+    commit_prompt_with_budget(branch, recent_commits, session_summary, diff_stat, diff)
   context.diff = prompt_diff
   log().debug(
     string.format(

@@ -40,6 +40,29 @@ return {
     --    That is to say, every time a new file is opened that is associated with
     --    an lsp (for example, opening `main.rs` is associated with `rust_analyzer`) this
     --    function will be executed to configure the current buffer
+    local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = true })
+    vim.api.nvim_create_autocmd('LspDetach', {
+      group = vim.api.nvim_create_augroup('kickstart-lsp-detach', { clear = true }),
+      callback = function(event)
+        -- Other attached clients may still provide document highlights.
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(event.buf) then
+            return
+          end
+          local supports_highlight = false
+          for _, client in ipairs(vim.lsp.get_clients { bufnr = event.buf }) do
+            if client:supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
+              supports_highlight = true
+              break
+            end
+          end
+          if not supports_highlight then
+            vim.api.nvim_clear_autocmds { group = highlight_augroup, buffer = event.buf }
+            vim.api.nvim_buf_call(event.buf, vim.lsp.buf.clear_references)
+          end
+        end)
+      end,
+    })
     vim.api.nvim_create_autocmd('LspAttach', {
       group = vim.api.nvim_create_augroup('kickstart-lsp-attach', { clear = true }),
       callback = function(event)
@@ -102,7 +125,7 @@ return {
         -- When you move your cursor, the highlights will be cleared (the second autocommand).
         local client = vim.lsp.get_client_by_id(event.data.client_id)
         if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
-          local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
+          vim.api.nvim_clear_autocmds { group = highlight_augroup, buffer = event.buf }
           vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
             buffer = event.buf,
             group = highlight_augroup,
@@ -113,14 +136,6 @@ return {
             buffer = event.buf,
             group = highlight_augroup,
             callback = vim.lsp.buf.clear_references,
-          })
-
-          vim.api.nvim_create_autocmd('LspDetach', {
-            group = vim.api.nvim_create_augroup('kickstart-lsp-detach', { clear = true }),
-            callback = function(event2)
-              vim.lsp.buf.clear_references()
-              vim.api.nvim_clear_autocmds { group = 'kickstart-lsp-highlight', buffer = event2.buf }
-            end,
           })
         end
 

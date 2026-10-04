@@ -211,30 +211,8 @@ end, { desc = '[D]ate and time' })
 vim.keymap.set({ 'n', 'v' }, '<leader>y', [["+y]], { desc = '[Y]ank to system clipboard' })
 vim.keymap.set('n', '<leader>Y', [["+Y]], { desc = '[Y]ank to end of line to system clipboard' })
 
--- Change fold, to toggle on zz
-vim.keymap.set('n', 'zz', 'za', { desc = 'Toggle fold at current cursor position' })
+-- Keep zz for centering; toggle folds with za.
 
--- [[ Custom Tabline ]]
--- Custom tab names
-vim.o.tabline = '%!v:lua.MyTabline()'
-
-function _G.MyTabline()
-  local s = ''
-  for i = 1, vim.fn.tabpagenr '$' do
-    local winnr = vim.fn.tabpagewinnr(i)
-    local buflist = vim.fn.tabpagebuflist(i)
-    local bufnr = buflist[winnr]
-    local bufname = vim.fn.fnamemodify(vim.fn.bufname(bufnr), ':t')
-
-    -- Here you decide how the tab should be named
-    if bufname == '' then
-      bufname = '[No Name]'
-    end
-
-    s = s .. '%' .. i .. 'T' .. ' ' .. bufname .. ' '
-  end
-  return s
-end
 -- Keybinds for switching tabs with Ctrl+1-9
 for i = 1, 9 do
   vim.keymap.set('n', '<C-' .. i .. '>', function()

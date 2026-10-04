@@ -180,14 +180,14 @@ function M.stream_json_lines(request)
       end
 
       local text = tostring(output)
-      if stdout_buffer == '' and not text:find('[\r\n]') then
+      if stdout_buffer == '' and not text:find '[\r\n]' then
         process_stdout_line(text)
         return
       end
 
       stdout_buffer = stdout_buffer .. text
       while true do
-        local newline_at = stdout_buffer:find('[\r\n]')
+        local newline_at = stdout_buffer:find '[\r\n]'
         if not newline_at then
           break
         end
