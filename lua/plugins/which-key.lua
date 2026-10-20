@@ -28,7 +28,7 @@ return { -- Useful plugin to show you pending keybinds.
 
     -- Document existing key chains
     spec = {
-      { '<leader>a', group = 'Avante' },
+      { '<leader>a', group = 'Pi', mode = { 'n', 'x' } },
       { '<leader>c', group = 'Code', mode = { 'n', 'x' } },
       { '<leader>ct', group = 'Tests' },
       { '<leader>d', group = 'Document' },

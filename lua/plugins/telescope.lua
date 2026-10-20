@@ -1,45 +1,12 @@
-local function code_files_picker(opts)
-  opts = opts or {}
-
-  local exts = {
-    'cpp',
-    'c',
-    'h',
-    'hpp',
-    'rs',
-    'java',
-    'js',
-    'ts',
-    'jsx',
-    'tsx',
-    'html',
-    'css',
-    'scss',
-    'py',
-    'go',
-    'lua',
-  }
-
-  local brace_pattern = '*.{' .. table.concat(exts, ',') .. '}'
-  local find_cmd = {
-    'fd',
-    '--type',
-    'f',
-    '--follow',
-    '--exclude',
-    '.git',
-    '--max-results',
-    '10000',
-    '--strip-cwd-prefix',
-    '-g',
-    brace_pattern,
-  }
-
+local function project_files_picker(opts)
+  -- Include source, config, docs, extensionless files, and dotfiles.
+  -- fd still respects .gitignore/.ignore; never search Git's internal files.
   require('telescope.builtin').find_files(vim.tbl_extend('force', {
-    find_command = find_cmd,
-    prompt_title = 'Code files',
+    find_command = { 'fd', '--type', 'f', '--color', 'never', '--exclude', '.git', '--strip-cwd-prefix' },
+    prompt_title = 'Project files',
     hidden = true,
-  }, opts))
+    follow = true,
+  }, opts or {}))
 end
 
 --- @type LazySpec | LazySpec[]
@@ -81,18 +48,18 @@ return { -- Fuzzy Finder (files, lsp, etc)
     vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
     vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
     vim.keymap.set('n', '<leader>sb', builtin.buffers, { desc = '[S]earch [B]uffers' })
-    vim.keymap.set('n', '<leader>sf', builtin.find_files, { desc = '[S]earch [F]iles' })
+    vim.keymap.set('n', '<leader>sf', project_files_picker, { desc = '[S]earch [F]iles' })
     vim.keymap.set('n', '<leader>ss', builtin.builtin, { desc = '[S]earch [S]elect Telescope' })
     vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
     vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
     vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
     vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
     vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
-    vim.keymap.set('n', '<leader><leader>', code_files_picker, { desc = '[ ] Find code' })
+    vim.keymap.set('n', '<leader><leader>', project_files_picker, { desc = '[ ] Find project files' })
 
     vim.keymap.set('n', '<leader>sF', function()
-      builtin.find_files { no_ignore = true }
-    end, { desc = '[S]earch [F]iles, including hidden' })
+      project_files_picker { no_ignore = true, prompt_title = 'All files (including ignored)' }
+    end, { desc = '[S]earch [F]iles, including ignored' })
 
     vim.keymap.set('n', '<leader>/', function()
       builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
@@ -127,8 +94,8 @@ return { -- Fuzzy Finder (files, lsp, etc)
     { '<leader>sd', desc = '[S]earch [D]iagnostics' },
     { '<leader>sr', desc = '[S]earch [R]esume' },
     { '<leader>s.', desc = '[S]earch Recent Files ("." for repeat)' },
-    { '<leader><leader>', desc = '[ ] Find code' },
-    { '<leader>sF', desc = '[S]earch [F]iles, including hidden' },
+    { '<leader><leader>', desc = '[ ] Find project files' },
+    { '<leader>sF', desc = '[S]earch [F]iles, including ignored' },
     { '<leader>/', desc = '[/] Fuzzily search in current buffer' },
     { '<leader>s/', desc = '[S]earch [/] in Open Files' },
     { '<leader>sn', desc = '[S]earch [N]eovim files' },
