@@ -8,13 +8,8 @@ local Log = require('plenary.log').new {
 
 local M = {}
 
--- kustomization.yaml is already mapped to the SchemaStore kustomize schema in
--- lsp/yamlls.lua (kustomize.config.k8s.io is client-side-only and never shows
--- up in a cluster's OpenAPI, so it can't be fetched like the CRDs below).
--- We only need to make sure our own CRD-derived schema never also matches
--- that file, since yaml-language-server ANDs together every schema entry
--- that matches a given file.
 local KUSTOMIZE_FILE_GLOB = '**/kustomization.yaml'
+local KUSTOMIZE_SCHEMA_URI = 'https://json.schemastore.org/kustomization.json'
 
 M.config = {
   cache_dir = vim.fn.expand '~/.cache/k8s-schemas/',
@@ -125,6 +120,7 @@ local function apply_context(context)
     -- Assigning the whole resolved config avoids a deep merge retaining the old URI.
     local config = vim.lsp.config.yamlls or {}
     local schemas = vim.deepcopy(((config.settings or {}).yaml or {}).schemas or {})
+    schemas[KUSTOMIZE_SCHEMA_URI] = KUSTOMIZE_FILE_GLOB
     if previous_schema_uri then
       schemas[previous_schema_uri] = nil
     end
@@ -147,6 +143,7 @@ local function apply_context(context)
       for _, client in ipairs(clients) do
         client.settings = client.settings or {}
         client.settings.yaml = client.settings.yaml or {}
+        client.settings.yaml.validate = true
         -- Merge into the schemas the client already resolved (e.g. the
         -- kustomize/for_k8s entries from lsp/yamlls.lua) instead of
         -- replacing the table outright, which would otherwise drop them.
