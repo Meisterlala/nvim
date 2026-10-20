@@ -272,7 +272,7 @@ function M.generate_schemas()
       args = { '--context', context, 'get', '--raw', api.serverRelativeURL },
       on_exit = function(j, result_val)
         if result_val ~= 0 then
-          Log.error('Error fetching OpenAPI: ' .. api.serverRelativeURL, j:result())
+          Log.error('Error fetching OpenAPI: ' .. api.serverRelativeURL, j:stderr_result())
           callback(false)
           return
         end
@@ -332,7 +332,11 @@ function M.generate_schemas()
 
     local paths = {}
     for path, api in pairs(schema_list.paths) do
-      table.insert(paths, { path, api })
+      -- Discovery also advertises non-resource APIs (e.g. OpenID endpoints)
+      -- whose valid OpenAPI documents need not contain components.schemas.
+      if path:match '^api/[^/]+$' or path:match '^apis/[^/]+/[^/]+$' then
+        table.insert(paths, { path, api })
+      end
     end
     total_jobs = #paths
 
